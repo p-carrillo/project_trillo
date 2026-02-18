@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+**/node_modules/
+**/node_modules/**
+.pnpm-store/
+**/.pnpm-store/
+**/.pnpm-store/**
+pnpm-store/
+**/pnpm-store/
+**/pnpm-store/**
+.local/share/pnpm/
+.npm/
+
+# Build and cache artifacts
+.turbo/
+.cache/
+dist/
+build/
+coverage/
+storybook-static/
+*.tsbuildinfo
+
+# Frontend framework outputs
+.next/
+out/
+.nuxt/
+.svelte-kit/
+
+# Test artifacts
+playwright-report/
+test-results/
+vitest-report/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files (keep examples)
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.*.example
+
+# Temporary/runtime files
+tmp/
+temp/
+*.pid
+*.seed
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo

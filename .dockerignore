@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+.turbo
+.git
+coverage
+dist
+build
+pnpm-store
+.pnpm-store

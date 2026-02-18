@@ -1,107 +1,71 @@
-# Fullstack TypeScript Monorepo Template (Docker-First)
+# Trillo Task Manager Monorepo
 
-## What this template is
-This repository is a production-oriented monorepo template for fullstack TypeScript systems, designed for agent-assisted development.
+Task manager fullstack con arquitectura hexagonal en backend, contratos compartidos y ejecución Docker-first.
 
-It provides:
-- A strict documentation-driven workflow before product code.
-- Hexagonal backend module boundaries with a mandatory `platform` composition root.
-- Docker-first local and production-aligned runtime expectations.
-- Monorepo build orchestration with `pnpm workspaces` + `Turborepo`.
-- ADR-driven decision tracking for architecture and major dependency choices.
+## Estructura relevante
+- `apps/web`: frontend React + Vite con UI kanban inspirada en `.ai/designs`.
+- `modules/tasks`: dominio y casos de uso de tareas, repositorio MariaDB e interfaz HTTP.
+- `modules/platform`: composition root único del backend (Fastify, config, wiring).
+- `packages/contracts`: OpenAPI y tipos compartidos (`trillo.v1.yaml`, `types.ts`).
+- `docker/compose.dev.yml`: stack local (MariaDB + backend + frontend).
 
-## Problems this template solves
-- Prevents architecture drift with explicit standards and ADR governance.
-- Reduces "works on my machine" issues with Docker-first assumptions.
-- Scales teams and modules safely with strict dependency boundaries.
-- Improves delivery reliability via consistent build, test, and CI conventions.
-- Makes agent output more predictable by defining authoritative guidance in `.ai/`.
+## API principal
+- `GET /api/v1/projects`
+- `POST /api/v1/projects`
+- `DELETE /api/v1/projects/:projectId`
+- `GET /api/v1/tasks?boardId=<id>`
+- `POST /api/v1/tasks`
+- `PATCH /api/v1/tasks/:taskId/status`
+- `GET /health/live`
+- `GET /health/ready`
 
-## Quickstart
-1. Clone and enter the project:
+## Ejecutar con Docker
 ```bash
-git clone <your-template-repo-url> <new-project-name>
-cd <new-project-name>
-```
-2. Ensure toolchain is available (Node.js 22 LTS and pnpm):
-```bash
-corepack enable
-node -v
-pnpm -v
-```
-3. Install dependencies:
-```bash
-pnpm install
-```
-4. Run standard checks:
-```bash
-pnpm turbo run lint test typecheck build
-```
-
-## Docker Quickstart
-Use Docker as the default execution environment for local development.
-
-High-level commands:
-```bash
-# Start local stack (database + backend + frontend + optional reverse proxy)
 docker compose -f docker/compose.dev.yml up --build
-
-# Stop local stack
-docker compose -f docker/compose.dev.yml down
 ```
 
-Expected behavior:
-- Backend container starts from `modules/platform`.
-- Services expose health endpoints.
-- Logs are emitted to stdout/stderr.
+Servicios:
+- Frontend: `http://localhost:8080`
+- Backend: `http://localhost:3000`
+- MariaDB: `localhost:3306`
 
-## Build System Quickstart (Turborepo)
-Use Turborepo for all monorepo tasks.
+## Desarrollo frontend con hot reload (watch)
+Para cambios inmediatos en UI (Vite + HMR dentro de Docker):
 
-Examples:
 ```bash
-# Run one task across all relevant workspaces
-pnpm turbo run test
-
-# Run full verification pipeline
-pnpm turbo run lint test typecheck build
-
-# Scope to one package/app/module
-pnpm turbo run build --filter=@apps/web
+docker compose -f docker/compose.dev.yml up -d mariadb backend web-dev
 ```
 
-Conventions:
-- Every workspace uses the same script names: `dev`, `build`, `test`, `lint`, `typecheck`.
-- Task dependencies and cache behavior are defined in `turbo.json`.
+Frontend dev:
+- `http://localhost:5173`
 
-## Bootstrap Prompt
-Use this prompt when starting a new project from this template:
+Notas:
+- `web-dev` usa bind mount del repo y levanta `pnpm dev`.
+- `/api/*` se proxea a `backend` automáticamente desde Vite.
+- Si ya tienes `web` (nginx en `:8080`) corriendo, puedes mantenerlo o pararlo:
 
-```text
-You are bootstrapping a new project from a TypeScript monorepo template.
+```bash
+docker compose -f docker/compose.dev.yml stop web
+```
 
-Goals:
-1) Understand this project's domain, business constraints, operational constraints, and quality requirements.
-2) Update `/AGENTS.md` so roles, module boundaries, and constraints are project-specific.
-3) Review and update `.ai/standars/*` files where needed, with priority on:
-   - `.ai/standars/architecture.md`
-   - `.ai/standars/repo-structure.md`
-   - `.ai/standars/api.md`
-   - `.ai/standars/packages.md`
-   - `.ai/standars/docker.md`
-   - `.ai/standars/build.md`
-4) Rename and adjust modules list and boundaries to match the project domain.
-5) Create initial ADRs in `.adr/` for major architectural and technology decisions.
-6) Consolidate all documentation so it is project-specific, actionable, and no longer template-generic.
+## Calidad y checks
+Scripts estándar por workspace: `dev`, `build`, `test`, `lint`, `typecheck`.
 
-Process constraints:
-- Do not generate product/application code until documentation and ADRs are aligned and approved.
-- If a major dependency or architectural choice changes, document it first and create/update ADRs.
-- Keep Docker-first assumptions for local and production runtime.
+Pipeline monorepo:
+```bash
+corepack pnpm turbo run lint test typecheck build
+```
+Este comando es obligatorio antes de cerrar cualquier cambio.
 
-Deliverables for this bootstrap phase:
-- Updated `/AGENTS.md`
-- Updated `.ai/standars/*.md` files
-- Initial ADR set in `.adr/`
-- A short summary of decisions and unresolved questions
+## Troubleshooting rápido
+- Si aparece `Unexpected API error` al usar endpoints nuevos, confirma que el backend no está desactualizado y reconstruye:
+
+```bash
+docker compose -f docker/compose.dev.yml up -d --build backend
+```
+
+- Luego valida salud del backend:
+
+```bash
+docker compose -f docker/compose.dev.yml exec -T backend node -e "fetch('http://127.0.0.1:3000/health/ready').then(r=>console.log(r.status)).catch(()=>process.exit(1))"
 ```

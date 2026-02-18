@@ -3,40 +3,34 @@
 ## Purpose
 This file defines mandatory behavior for agents working in this repository.
 
-## Roles
-
-### architect
-- Owns architecture integrity, module boundaries, and long-term maintainability.
-- Approves structural changes and validates compliance with Hexagonal Architecture.
-- Ensures ADRs exist for architectural and significant dependency decisions.
-
-### backend developer
-- Implements backend features inside module boundaries and layer rules.
-- Keeps controllers/adapters thin and puts business logic in application/domain.
-- Ensures platform module remains composition-only.
-
-### frontend developer
-- Implements frontend applications in `/apps` respecting API contracts.
-- Maintains accessibility, SEO, performance, and consistent UI architecture.
-- Preserves Docker-first assumptions for development and production builds.
-
-### reviewer
-- Validates compliance with all standards before merge.
-- Rejects changes that break architecture boundaries or missing ADR requirements.
-- Confirms tests and quality gates are complete.
+## Mandatory first rule
+- Following all `.ai/standars` documents is mandatory in every change.
 
 ## Mandatory rules
-- Follow all `.ai/standars` documents.
+
+### Common
 - Do not violate Hexagonal Architecture rules.
 - Every relevant architectural decision must be recorded in an ADR.
 - No significant dependency introduction without ADR.
 - Always write tests.
+- Before marking any code change as done, run the full quality gate: `pnpm turbo run lint test typecheck build` (inside Docker when using Docker-first workflow).
+- If backend code under `/modules` changes, rebuild/restart backend containers before manual verification to avoid stale-runtime false negatives.
 - Keep code quality high: maintainability, clarity, and consistency.
+- Docker-first: any runtime assumption must be valid inside Docker containers.
+
+### Backend
+- Keep controllers/adapters thin and put business logic in application/domain.
 - Never place DB queries outside repositories.
 - Repository interfaces must live in the Domain layer; implementations live in Infrastructure.
 - Cross-module imports are forbidden unless through `/packages/contracts` (or explicit public API boundary documented in standards/ADR).
-- Docker-first: any runtime assumption must be valid inside Docker containers.
 - Backend composition root is mandatory: `/modules/platform` must exist and is the only backend entrypoint.
+- Use these backend standards at minimum: `.ai/standars/backend.md`, `.ai/standars/architecture.md`, `.ai/standars/repo-structure.md`, `.ai/standars/api.md`, `.ai/standars/database.md`, `.ai/standars/errors.md`, `.ai/standars/observability.md`, `.ai/standars/test.md`, `.ai/standars/docker.md`.
+
+### Frontend
+- Implement frontend applications in `/apps` respecting API contracts.
+- Maintain accessibility, SEO, performance, and consistent UI architecture.
+- Preserve Docker-first assumptions for development and production builds.
+- Use these frontend standards at minimum: `.ai/standars/frontend.md`, `.ai/standars/architecture.md`, `.ai/standars/repo-structure.md`, `.ai/standars/api.md`, `.ai/standars/seo.md`, `.ai/standars/performance.md`, `.ai/standars/test.md`, `.ai/standars/docker.md`.
 
 ## When to create ADRs
 Create or update an ADR when:
@@ -47,9 +41,9 @@ Create or update an ADR when:
 - Approving exceptions to existing standards.
 
 ## How to propose changes
-1. Update relevant standards and/or `AGENTS.md` first.
-2. Create or update ADRs documenting context, decision, and tradeoffs.
-3. Only then implement code aligned with updated docs.
+1. For regular feature/fix changes, do not modify `.ai/standars`; apply them as mandatory rules.
+2. Create or update ADRs documenting context, decision, and tradeoffs when required.
+3. Implement code aligned with existing standards and ADRs.
 4. Validate with tests and quality checks.
 
 ## Reviewer checklist
