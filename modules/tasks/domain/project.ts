@@ -1,8 +1,9 @@
-import { InvalidBoardIdError, InvalidProjectNameError } from './errors';
+import { InvalidBoardIdError, InvalidProjectDescriptionError, InvalidProjectNameError } from './errors';
 
 export interface Project {
   id: string;
   name: string;
+  description: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -10,8 +11,14 @@ export interface Project {
 export interface NewProject {
   id: string;
   name: string;
+  description: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ProjectPatch {
+  name: string;
+  description: string | null;
 }
 
 export function normalizeProjectId(rawProjectId: string): string {
@@ -31,4 +38,22 @@ export function normalizeProjectName(rawName: string): string {
   }
 
   return name;
+}
+
+export function normalizeProjectDescription(rawDescription?: string | null): string | null {
+  if (typeof rawDescription !== 'string') {
+    return null;
+  }
+
+  const description = rawDescription.trim();
+
+  if (description.length === 0) {
+    return null;
+  }
+
+  if (description.length > 4000) {
+    throw new InvalidProjectDescriptionError();
+  }
+
+  return description;
 }

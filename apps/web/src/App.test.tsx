@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ProjectDto, TaskDto } from '@trillo/contracts';
 import { App } from './App';
@@ -20,6 +20,7 @@ vi.mock('./features/tasks/api/task-api', () => ({
 vi.mock('./features/tasks/api/project-api', () => ({
   fetchProjects: vi.fn(),
   createProject: vi.fn(),
+  updateProject: vi.fn(),
   deleteProject: vi.fn(),
   isProjectApiError: (error: unknown): error is { message: string; code: string; statusCode: number } => {
     return typeof error === 'object' && error !== null && 'message' in error && 'code' in error;
@@ -34,11 +35,13 @@ const deleteTaskMock = vi.mocked(taskApi.deleteTask);
 
 const fetchProjectsMock = vi.mocked(projectApi.fetchProjects);
 const createProjectMock = vi.mocked(projectApi.createProject);
+const updateProjectMock = vi.mocked(projectApi.updateProject);
 const deleteProjectMock = vi.mocked(projectApi.deleteProject);
 
 const projectAlpha: ProjectDto = {
   id: 'project-alpha',
   name: 'Project Alpha',
+  description: 'Main board',
   createdAt: '2026-02-17T10:00:00.000Z',
   updatedAt: '2026-02-17T10:00:00.000Z'
 };
@@ -46,6 +49,7 @@ const projectAlpha: ProjectDto = {
 const projectBeta: ProjectDto = {
   id: 'project-beta',
   name: 'Project Beta',
+  description: null,
   createdAt: '2026-02-17T10:00:00.000Z',
   updatedAt: '2026-02-17T10:00:00.000Z'
 };
@@ -99,7 +103,6 @@ describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     fetchProjectsMock.mockResolvedValue([projectAlpha, projectBeta]);
     fetchTasksMock.mockImplementation(async (boardId) => {
@@ -116,7 +119,14 @@ describe('App', () => {
     createProjectMock.mockResolvedValue({
       id: 'project-gamma',
       name: 'Project Gamma',
+      description: null,
       createdAt: '2026-02-18T10:00:00.000Z',
+      updatedAt: '2026-02-18T10:00:00.000Z'
+    });
+    updateProjectMock.mockResolvedValue({
+      ...projectAlpha,
+      name: 'Project Alpha v2',
+      description: 'Updated scope',
       updatedAt: '2026-02-18T10:00:00.000Z'
     });
     deleteProjectMock.mockResolvedValue();
@@ -254,7 +264,11 @@ describe('App', () => {
     expect(await screen.findByText('Review launch checklist')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Open workspace menu' }));
-    await user.click(screen.getByRole('button', { name: 'Delete project Project Alpha' }));
+    await user.click(screen.getByRole('button', { name: 'Open project options Project Alpha' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const deleteDialog = screen.getByRole('dialog', { name: 'Delete project' });
+    await user.click(within(deleteDialog).getByRole('button', { name: 'Delete project' }));
 
     await waitFor(() => {
       expect(deleteProjectMock).toHaveBeenCalledWith('project-alpha');
@@ -263,6 +277,50 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Project Beta' })).toBeInTheDocument();
     expect(await screen.findByText('Beta board task')).toBeInTheDocument();
     expect(screen.queryByText('Review launch checklist')).not.toBeInTheDocument();
+  });
+
+  it('uses the shared confirmation dialog when deleting a task', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByText('Review launch checklist')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open task settings for Review launch checklist' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const deleteDialog = screen.getByRole('dialog', { name: 'Delete task' });
+    await user.click(within(deleteDialog).getByRole('button', { name: 'Delete task' }));
+
+    await waitFor(() => {
+      expect(deleteTaskMock).toHaveBeenCalledWith('task-1');
+    });
+
+    expect(screen.queryByText('Review launch checklist')).not.toBeInTheDocument();
+  });
+
+  it('updates project details from project panel', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Project Alpha' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace menu' }));
+    await user.click(screen.getByRole('button', { name: 'Open project options Project Alpha' }));
+    const projectDialog = screen.getByRole('dialog', { name: 'Edit project' });
+    await user.clear(within(projectDialog).getByLabelText('Name'));
+    await user.type(within(projectDialog).getByLabelText('Name'), 'Project Alpha v2');
+    await user.clear(within(projectDialog).getByLabelText('Description'));
+    await user.type(within(projectDialog).getByLabelText('Description'), 'Updated scope');
+    await user.click(within(projectDialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(updateProjectMock).toHaveBeenCalledWith('project-alpha', {
+        name: 'Project Alpha v2',
+        description: 'Updated scope'
+      });
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Project Alpha v2' })).toBeInTheDocument();
   });
 
   it('keeps custom columns isolated by project', async () => {

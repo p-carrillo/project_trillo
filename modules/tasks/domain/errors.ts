@@ -32,6 +32,12 @@ export class InvalidProjectNameError extends TaskDomainError {
   }
 }
 
+export class InvalidProjectDescriptionError extends TaskDomainError {
+  constructor() {
+    super('invalid_project_description', 'Project description must have at most 4000 characters.');
+  }
+}
+
 export class TaskNotFoundError extends TaskDomainError {
   constructor(taskId: string) {
     super('task_not_found', `Task ${taskId} was not found.`);

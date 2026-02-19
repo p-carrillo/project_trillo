@@ -15,6 +15,7 @@ Frontends live in `/apps/<app-name>` and are treated as independent deployable u
 
 ## Quality
 - Accessibility is mandatory (semantic HTML, keyboard support, labels).
+- Destructive actions must use a shared in-app confirmation dialog pattern; avoid browser-native `window.confirm`.
 - SEO requirements must follow `.ai/standars/seo.md`.
 - Performance budgets and monitoring follow `.ai/standars/performance.md`.
 

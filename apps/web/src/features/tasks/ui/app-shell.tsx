@@ -7,6 +7,7 @@ interface AppShellProps {
   createPanel: ReactNode;
   isSidebarOpen: boolean;
   isCreatePanelOpen: boolean;
+  panelCloseLabel: string;
   onCloseSidebar: () => void;
   onCloseCreatePanel: () => void;
 }
@@ -18,6 +19,7 @@ export function AppShell({
   createPanel,
   isSidebarOpen,
   isCreatePanelOpen,
+  panelCloseLabel,
   onCloseSidebar,
   onCloseCreatePanel
 }: AppShellProps) {
@@ -29,7 +31,7 @@ export function AppShell({
         type="button"
         className={`app-backdrop ${overlayTarget ? 'app-backdrop--visible' : ''}`}
         onClick={overlayTarget === 'create-panel' ? onCloseCreatePanel : onCloseSidebar}
-        aria-label={overlayTarget === 'create-panel' ? 'Close create task panel' : 'Close workspace menu'}
+        aria-label={overlayTarget === 'create-panel' ? panelCloseLabel : 'Close workspace menu'}
         aria-hidden={!overlayTarget}
         tabIndex={overlayTarget ? 0 : -1}
         disabled={!overlayTarget}

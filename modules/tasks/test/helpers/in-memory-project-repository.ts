@@ -3,6 +3,7 @@ import {
   ProjectNotFoundError,
   type NewProject,
   type Project,
+  type ProjectPatch,
   type ProjectRepository
 } from '../../domain';
 
@@ -34,6 +35,28 @@ export class InMemoryProjectRepository implements ProjectRepository {
     const entity: Project = { ...project };
     this.projects.set(project.id, entity);
     return entity;
+  }
+
+  async update(projectId: string, patch: ProjectPatch, updatedAt: Date): Promise<Project> {
+    const current = await this.findById(projectId);
+    if (!current) {
+      throw new ProjectNotFoundError(projectId);
+    }
+
+    const duplicated = await this.findByName(patch.name);
+    if (duplicated && duplicated.id !== projectId) {
+      throw new ProjectNameTakenError(patch.name);
+    }
+
+    const updated: Project = {
+      ...current,
+      name: patch.name,
+      description: patch.description,
+      updatedAt
+    };
+
+    this.projects.set(projectId, updated);
+    return updated;
   }
 
   async delete(projectId: string): Promise<void> {

@@ -6,12 +6,15 @@
   "types": "dist/platform/main.d.ts",
   "scripts": {
     "dev": "tsx watch platform/main.ts",
+    "mcp:dev": "tsx platform/mcp-main.ts --api-key=$MCP_API_KEY",
+    "mcp:start": "node dist/platform/mcp-main.js --api-key=$MCP_API_KEY",
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
     "fastify": "^5.2.1",
     "mysql2": "^3.12.0"
   }

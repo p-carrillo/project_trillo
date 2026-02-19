@@ -12,7 +12,8 @@ import {
   createProject as createProjectRecord,
   deleteProject as deleteProjectRecord,
   fetchProjects,
-  isProjectApiError
+  isProjectApiError,
+  updateProject as updateProjectRecord
 } from './features/tasks/api/project-api';
 import { buildTaskBoardColumns } from './features/tasks/board/board-model';
 import { AppShell } from './features/tasks/ui/app-shell';
@@ -20,6 +21,8 @@ import { AppSidebar } from './features/tasks/ui/app-sidebar';
 import { BoardHeader } from './features/tasks/ui/board-header';
 import { TaskBoard } from './features/tasks/ui/task-board';
 import { CreateTaskPanel } from './features/tasks/ui/create-task-panel';
+import { EditProjectPanel } from './features/tasks/ui/edit-project-panel';
+import { ConfirmActionDialog } from './features/tasks/ui/confirm-action-dialog';
 import { EpicTabs } from './features/tasks/ui/epic-tabs';
 
 const ACTIVE_PROJECT_STORAGE_KEY = 'trillo.active-project.v1';
@@ -31,6 +34,23 @@ interface CustomColumn {
   id: string;
   label: string;
 }
+
+interface ProjectFormState {
+  name: string;
+  description: string;
+}
+
+type DeleteTarget =
+  | {
+      type: 'project';
+      id: string;
+      name: string;
+    }
+  | {
+      type: 'task';
+      id: string;
+      title: string;
+    };
 
 type ColumnLabelOverrides = Partial<Record<TaskStatus, string>>;
 
@@ -44,20 +64,43 @@ export function App() {
   const [selectedEpicId, setSelectedEpicId] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectForm, setProjectForm] = useState<ProjectFormState>({
+    name: '',
+    description: ''
+  });
   const [columnLabelOverrides, setColumnLabelOverrides] = useState<ColumnLabelOverrides>({});
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+  const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isDeletingProjectId, setIsDeletingProjectId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
+  const editingProject = useMemo(
+    () => projects.find((project) => project.id === editingProjectId) ?? null,
+    [editingProjectId, projects]
+  );
   const activeProjectName = selectedProject?.name ?? 'Select a project';
+  const isAnyPanelOpen = isCreatePanelOpen || isProjectPanelOpen;
+  const panelCloseLabel = isProjectPanelOpen ? 'Close edit project panel' : 'Close create task panel';
+  const confirmDialogTitle = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
+  const confirmDialogMessage =
+    deleteTarget?.type === 'project'
+      ? `Delete project "${deleteTarget.name}"? This will remove all tasks, epics and board data from this project.`
+      : deleteTarget
+        ? `Delete task "${deleteTarget.title}"?`
+        : '';
+  const confirmDialogActionLabel = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
 
   const normalizedTasks = useMemo(() => tasks.map((task) => normalizeTaskDto(task)), [tasks]);
   const epics = useMemo(
@@ -144,8 +187,18 @@ export function App() {
         return;
       }
 
+      if (deleteTarget) {
+        setDeleteTarget(null);
+        return;
+      }
+
       if (isCreatePanelOpen) {
         handleCloseCreatePanel();
+        return;
+      }
+
+      if (isProjectPanelOpen) {
+        handleCloseProjectPanel();
         return;
       }
 
@@ -159,16 +212,16 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isCreatePanelOpen, isSidebarOpen]);
+  }, [deleteTarget, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen]);
 
   useEffect(() => {
-    const hasOpenOverlay = isCreatePanelOpen || isSidebarOpen;
+    const hasOpenOverlay = Boolean(deleteTarget) || isAnyPanelOpen || isSidebarOpen;
     document.body.classList.toggle('body-scroll-lock', hasOpenOverlay);
 
     return () => {
       document.body.classList.remove('body-scroll-lock');
     };
-  }, [isCreatePanelOpen, isSidebarOpen]);
+  }, [deleteTarget, isAnyPanelOpen, isSidebarOpen]);
 
   useEffect(() => {
     if (selectedEpicId === 'all') {
@@ -230,18 +283,118 @@ export function App() {
     }
   }
 
-  async function handleDeleteProject(projectId: string) {
+  function handleOpenProjectPanel(projectId: string) {
     const project = projects.find((item) => item.id === projectId);
     if (!project) {
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `Delete project "${project.name}"? This will remove all tasks, epics and board data from this project.`
-    );
+    setErrorMessage(null);
+    setIsSidebarOpen(false);
+    setIsCreatePanelOpen(false);
+    setEditingTaskId(null);
+    setEditingProjectId(project.id);
+    setProjectForm({
+      name: project.name,
+      description: project.description ?? ''
+    });
+    setIsProjectPanelOpen(true);
+  }
 
-    if (!shouldDelete) {
+  function handleUpdateProjectField(field: keyof ProjectFormState, value: string) {
+    setProjectForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  async function handleSubmitProjectUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingProjectId) {
       return;
+    }
+
+    const project = projects.find((item) => item.id === editingProjectId);
+    if (!project) {
+      return;
+    }
+
+    const nextName = projectForm.name.trim();
+    const nextDescription = normalizeProjectDescription(projectForm.description);
+
+    if (nextName.length === 0) {
+      return;
+    }
+
+    if (project.name === nextName && project.description === nextDescription) {
+      handleCloseProjectPanel();
+      return;
+    }
+
+    setIsSubmittingProject(true);
+    setErrorMessage(null);
+
+    try {
+      const updated = await updateProjectRecord(editingProjectId, {
+        name: nextName,
+        description: nextDescription
+      });
+
+      setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      handleCloseProjectPanel();
+    } catch (error) {
+      setErrorMessage(mapErrorMessage(error));
+    } finally {
+      setIsSubmittingProject(false);
+    }
+  }
+
+  function handleRequestDeleteProject(projectId: string) {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) {
+      return;
+    }
+
+    setDeleteTarget({
+      type: 'project',
+      id: project.id,
+      name: project.name
+    });
+  }
+
+  function handleRequestDeleteTask(task: TaskDto) {
+    setDeleteTarget({
+      type: 'task',
+      id: task.id,
+      title: task.title
+    });
+  }
+
+  async function handleConfirmDeleteTarget() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setIsConfirmingDelete(true);
+    const target = deleteTarget;
+
+    try {
+      const deleted =
+        target.type === 'project' ? await performDeleteProject(target.id) : await performDeleteTask(target.id);
+
+      if (deleted) {
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsConfirmingDelete(false);
+    }
+  }
+
+  async function performDeleteProject(projectId: string): Promise<boolean> {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) {
+      return false;
     }
 
     setIsDeletingProjectId(projectId);
@@ -255,7 +408,12 @@ export function App() {
       clearProjectViewState(projectId);
 
       if (selectedProjectId !== projectId) {
-        return;
+        if (editingProjectId === projectId) {
+          setIsProjectPanelOpen(false);
+          resetProjectFormState();
+        }
+
+        return true;
       }
 
       const fallbackProjectId = nextProjects[0]?.id ?? null;
@@ -265,9 +423,13 @@ export function App() {
       setSelectedEpicId('all');
       setEditingTaskId(null);
       setIsCreatePanelOpen(false);
+      setIsProjectPanelOpen(false);
+      resetProjectFormState();
       setForm(createInitialForm(fallbackProjectId));
+      return true;
     } catch (error) {
       setErrorMessage(mapErrorMessage(error));
+      return false;
     } finally {
       setIsDeletingProjectId(null);
     }
@@ -351,24 +513,21 @@ export function App() {
     }
   }
 
-  async function handleDeleteTask(task: TaskDto) {
-    const shouldDelete = window.confirm(`Delete task "${task.title}"?`);
-    if (!shouldDelete) {
-      return;
-    }
-
+  async function performDeleteTask(taskId: string): Promise<boolean> {
     setErrorMessage(null);
 
     try {
-      await deleteTask(task.id);
-      setTasks((current) => current.filter((item) => item.id !== task.id));
+      await deleteTask(taskId);
+      setTasks((current) => current.filter((item) => item.id !== taskId));
 
-      if (editingTaskId === task.id) {
+      if (editingTaskId === taskId) {
         resetFormState(selectedProjectId);
         setIsCreatePanelOpen(false);
       }
+      return true;
     } catch (error) {
       setErrorMessage(mapErrorMessage(error));
+      return false;
     }
   }
 
@@ -380,6 +539,8 @@ export function App() {
 
     setErrorMessage(null);
     setIsSidebarOpen(false);
+    setIsProjectPanelOpen(false);
+    resetProjectFormState();
     setEditingTaskId(task.id);
     setForm({
       boardId: task.boardId,
@@ -402,6 +563,8 @@ export function App() {
     setErrorMessage(null);
     setIsSidebarOpen(false);
     setIsCreatePanelOpen(false);
+    setIsProjectPanelOpen(false);
+    resetProjectFormState();
     setSearchText('');
     setSelectedEpicId('all');
     setEditingTaskId(null);
@@ -424,7 +587,9 @@ export function App() {
 
   function handleToggleSidebar() {
     setIsCreatePanelOpen(false);
+    setIsProjectPanelOpen(false);
     setEditingTaskId(null);
+    resetProjectFormState();
     setIsSidebarOpen((current) => !current);
   }
 
@@ -434,6 +599,8 @@ export function App() {
     }
 
     setIsSidebarOpen(false);
+    setIsProjectPanelOpen(false);
+    resetProjectFormState();
     resetFormState(selectedProjectId);
     setIsCreatePanelOpen(true);
   }
@@ -441,6 +608,20 @@ export function App() {
   function handleCloseCreatePanel() {
     resetFormState(selectedProjectId);
     setIsCreatePanelOpen(false);
+  }
+
+  function handleCloseProjectPanel() {
+    setIsProjectPanelOpen(false);
+    resetProjectFormState();
+  }
+
+  function handleCloseActivePanel() {
+    if (isProjectPanelOpen) {
+      handleCloseProjectPanel();
+      return;
+    }
+
+    handleCloseCreatePanel();
   }
 
   function handleAddCustomColumn(label: string) {
@@ -496,12 +677,21 @@ export function App() {
     setForm(createInitialForm(projectId));
   }
 
+  function resetProjectFormState() {
+    setEditingProjectId(null);
+    setProjectForm({
+      name: '',
+      description: ''
+    });
+  }
+
   return (
     <AppShell
       isSidebarOpen={isSidebarOpen}
-      isCreatePanelOpen={isCreatePanelOpen}
+      isCreatePanelOpen={isAnyPanelOpen}
+      panelCloseLabel={panelCloseLabel}
       onCloseSidebar={() => setIsSidebarOpen(false)}
-      onCloseCreatePanel={handleCloseCreatePanel}
+      onCloseCreatePanel={handleCloseActivePanel}
       sidebar={
         <AppSidebar
           isOpen={isSidebarOpen}
@@ -512,7 +702,7 @@ export function App() {
           onClose={() => setIsSidebarOpen(false)}
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
-          onDeleteProject={handleDeleteProject}
+          onOpenProjectPanel={handleOpenProjectPanel}
         />
       }
       header={
@@ -557,28 +747,57 @@ export function App() {
         </>
       }
       createPanel={
-        <CreateTaskPanel
-          isOpen={isCreatePanelOpen}
-          isSubmitting={isSubmittingTask}
-          mode={editingTaskId ? 'edit' : 'create'}
-          form={form}
-          epics={selectableEpics}
-          onClose={handleCloseCreatePanel}
-          onSubmit={handleSubmitTask}
-          onUpdateField={handleUpdateFormField}
-          {...(editingTaskId
-            ? {
-                onDeleteTask: () => {
-                  const task = tasks.find((item) => item.id === editingTaskId);
+        <>
+          <CreateTaskPanel
+            isOpen={isCreatePanelOpen}
+            isSubmitting={isSubmittingTask}
+            mode={editingTaskId ? 'edit' : 'create'}
+            form={form}
+            epics={selectableEpics}
+            onClose={handleCloseCreatePanel}
+            onSubmit={handleSubmitTask}
+            onUpdateField={handleUpdateFormField}
+            {...(editingTaskId
+              ? {
+                  onDeleteTask: () => {
+                    const task = tasks.find((item) => item.id === editingTaskId);
                   if (!task) {
                     return;
                   }
 
-                  void handleDeleteTask(task);
+                  handleRequestDeleteTask(task);
                 }
               }
             : {})}
-        />
+          />
+          <EditProjectPanel
+            isOpen={isProjectPanelOpen}
+            isSubmitting={isSubmittingProject}
+            isDeleting={Boolean(editingProjectId && isDeletingProjectId === editingProjectId)}
+            form={projectForm}
+            onClose={handleCloseProjectPanel}
+            onSubmit={handleSubmitProjectUpdate}
+            onUpdateField={handleUpdateProjectField}
+            onDeleteProject={() => {
+              if (!editingProject) {
+                return;
+              }
+
+              handleRequestDeleteProject(editingProject.id);
+            }}
+          />
+          <ConfirmActionDialog
+            isOpen={Boolean(deleteTarget)}
+            title={confirmDialogTitle}
+            message={confirmDialogMessage}
+            confirmLabel={confirmDialogActionLabel}
+            isSubmitting={isConfirmingDelete}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => {
+              void handleConfirmDeleteTarget();
+            }}
+          />
+        </>
       }
     />
   );
@@ -602,6 +821,15 @@ function normalizeTaskDto(task: TaskDto, fallback?: Pick<CreateTaskRequest, 'tas
 
 function normalizeColumnLabel(value: string): string {
   return value.trim().replace(/\s+/g, ' ').slice(0, 40);
+}
+
+function normalizeProjectDescription(value: string): string | null {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return normalized.slice(0, 4000);
 }
 
 function createCustomColumnId(): string {

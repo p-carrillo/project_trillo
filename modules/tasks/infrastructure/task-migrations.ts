@@ -14,11 +14,19 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS projects (
       id VARCHAR(64) PRIMARY KEY,
       name VARCHAR(120) NOT NULL,
+      description TEXT NULL,
       created_at DATETIME(3) NOT NULL,
       updated_at DATETIME(3) NOT NULL,
       UNIQUE KEY uk_projects_name (name)
     )
   `);
+
+  if (!(await hasTableColumn(pool, 'projects', 'description'))) {
+    await pool.query(`
+      ALTER TABLE projects
+      ADD COLUMN description TEXT NULL AFTER name
+    `);
+  }
 
   if (!(await hasIndex(pool, 'projects', 'uk_projects_name'))) {
     await pool.query(`
@@ -45,14 +53,14 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
     )
   `);
 
-  if (!(await hasColumn(pool, 'task_type'))) {
+  if (!(await hasTableColumn(pool, 'tasks', 'task_type'))) {
     await pool.query(`
       ALTER TABLE tasks
       ADD COLUMN task_type ENUM('task', 'epic') NOT NULL DEFAULT 'task' AFTER status
     `);
   }
 
-  if (!(await hasColumn(pool, 'epic_id'))) {
+  if (!(await hasTableColumn(pool, 'tasks', 'epic_id'))) {
     await pool.query(`
       ALTER TABLE tasks
       ADD COLUMN epic_id CHAR(36) NULL AFTER task_type
@@ -68,18 +76,19 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
 
   await pool.query(
     `
-    INSERT INTO projects (id, name, created_at, updated_at)
-    VALUES ('project-alpha', 'Project Alpha', NOW(3), NOW(3))
+    INSERT INTO projects (id, name, description, created_at, updated_at)
+    VALUES ('project-alpha', 'Project Alpha', 'Primary board for product planning and delivery.', NOW(3), NOW(3))
     ON DUPLICATE KEY UPDATE
       name = VALUES(name),
+      description = IFNULL(description, VALUES(description)),
       updated_at = VALUES(updated_at)
     `
   );
 
   await pool.query(
     `
-    INSERT INTO projects (id, name, created_at, updated_at)
-    SELECT DISTINCT t.board_id, t.board_id, NOW(3), NOW(3)
+    INSERT INTO projects (id, name, description, created_at, updated_at)
+    SELECT DISTINCT t.board_id, t.board_id, NULL, NOW(3), NOW(3)
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.board_id
     WHERE p.id IS NULL
@@ -148,16 +157,16 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
   );
 }
 
-async function hasColumn(pool: Pool, columnName: string): Promise<boolean> {
+async function hasTableColumn(pool: Pool, tableName: string, columnName: string): Promise<boolean> {
   const [rows] = await pool.query<ExistsRow[]>(
     `
     SELECT COUNT(*) AS total
     FROM information_schema.columns
     WHERE table_schema = DATABASE()
-      AND table_name = 'tasks'
+      AND table_name = ?
       AND column_name = ?
     `,
-    [columnName]
+    [tableName, columnName]
   );
 
   return (rows[0]?.total ?? 0) > 0;

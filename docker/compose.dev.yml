@@ -29,6 +29,7 @@ services:
       DB_USER: trillo
       DB_PASSWORD: trillo
       DB_NAME: trillo
+      MCP_API_KEY: change-me
       LOG_LEVEL: info
     depends_on:
       mariadb:

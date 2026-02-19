@@ -4,12 +4,14 @@ import {
   ProjectNotFoundError,
   type NewProject,
   type Project,
+  type ProjectPatch,
   type ProjectRepository
 } from '../domain';
 
 interface ProjectRow extends RowDataPacket {
   id: string;
   name: string;
+  description: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -20,7 +22,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async list(): Promise<Project[]> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, name, created_at, updated_at
+      SELECT id, name, description, created_at, updated_at
       FROM projects
       ORDER BY created_at ASC
       `
@@ -32,7 +34,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findById(projectId: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, name, created_at, updated_at
+      SELECT id, name, description, created_at, updated_at
       FROM projects
       WHERE id = ?
       LIMIT 1
@@ -48,7 +50,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findByName(name: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, name, created_at, updated_at
+      SELECT id, name, description, created_at, updated_at
       FROM projects
       WHERE name = ?
       LIMIT 1
@@ -65,10 +67,10 @@ export class MariaDbProjectRepository implements ProjectRepository {
     try {
       await this.pool.query<ResultSetHeader>(
         `
-        INSERT INTO projects (id, name, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO projects (id, name, description, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
         `,
-        [project.id, project.name, project.createdAt, project.updatedAt]
+        [project.id, project.name, project.description, project.createdAt, project.updatedAt]
       );
     } catch (error) {
       if (isDuplicateEntryError(error)) {
@@ -85,6 +87,37 @@ export class MariaDbProjectRepository implements ProjectRepository {
     }
 
     return created;
+  }
+
+  async update(projectId: string, patch: ProjectPatch, updatedAt: Date): Promise<Project> {
+    try {
+      const [result] = await this.pool.query<ResultSetHeader>(
+        `
+        UPDATE projects
+        SET name = ?, description = ?, updated_at = ?
+        WHERE id = ?
+        `,
+        [patch.name, patch.description, updatedAt, projectId]
+      );
+
+      if (result.affectedRows === 0) {
+        throw new ProjectNotFoundError(projectId);
+      }
+    } catch (error) {
+      if (isDuplicateEntryError(error)) {
+        throw new ProjectNameTakenError(patch.name);
+      }
+
+      throw error;
+    }
+
+    const updated = await this.findById(projectId);
+
+    if (!updated) {
+      throw new ProjectNotFoundError(projectId);
+    }
+
+    return updated;
   }
 
   async delete(projectId: string): Promise<void> {
@@ -105,6 +138,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
     return {
       id: row.id,
       name: row.name,
+      description: row.description,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)
     };

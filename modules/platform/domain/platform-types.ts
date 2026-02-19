@@ -5,3 +5,8 @@ export interface PlatformDependencies {
   taskService: TaskService;
   isDatabaseReady: () => Promise<boolean>;
 }
+
+export interface PlatformMcpDependencies {
+  projectService: ProjectService;
+  taskService: TaskService;
+}

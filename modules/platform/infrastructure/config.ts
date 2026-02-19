@@ -37,6 +37,15 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   };
 }
 
+export function loadMcpApiKey(env: NodeJS.ProcessEnv): string {
+  const apiKey = env.MCP_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('MCP_API_KEY is required for MCP runtime.');
+  }
+
+  return apiKey;
+}
+
 function parseNumericEnv(rawValue: string | undefined, fallback: number, variableName: string): number {
   if (!rawValue) {
     return fallback;

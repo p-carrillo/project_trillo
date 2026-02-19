@@ -14,6 +14,7 @@ export type ProjectId = string;
 export interface ProjectDto {
   id: ProjectId;
   name: string;
+  description: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,6 +28,12 @@ export interface ListProjectsResponse {
 
 export interface CreateProjectRequest {
   name: string;
+  description?: string | null;
+}
+
+export interface UpdateProjectRequest {
+  name?: string;
+  description?: string | null;
 }
 
 export interface ProjectResponse {

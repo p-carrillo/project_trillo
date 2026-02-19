@@ -20,13 +20,16 @@ describe('Task API contract', () => {
     expect(response.json()).toMatchObject({
       data: [
         {
-          name: 'Project Alpha'
+          name: 'Project Alpha',
+          description: 'Primary board for product planning and delivery.'
         },
         {
-          name: 'Website Redesign'
+          name: 'Website Redesign',
+          description: null
         },
         {
-          name: 'Mobile App Launch'
+          name: 'Mobile App Launch',
+          description: null
         }
       ],
       meta: {
@@ -44,14 +47,43 @@ describe('Task API contract', () => {
       method: 'POST',
       url: '/api/v1/projects',
       payload: {
-        name: 'Payments Platform'
+        name: 'Payments Platform',
+        description: 'Roadmap and delivery for payment features.'
       }
     });
 
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({
       data: {
-        name: 'Payments Platform'
+        name: 'Payments Platform',
+        description: 'Roadmap and delivery for payment features.'
+      }
+    });
+
+    await server.close();
+  });
+
+  it('updates a project through API', async () => {
+    const { server, projectService } = await createTestServer();
+    const project = await projectService.createProject({
+      name: 'Website Redesign'
+    });
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/api/v1/projects/${project.id}`,
+      payload: {
+        name: 'Website Redesign v2',
+        description: 'Aligned to Q2 goals.'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: project.id,
+        name: 'Website Redesign v2',
+        description: 'Aligned to Q2 goals.'
       }
     });
 
@@ -384,6 +416,7 @@ async function createTestServer() {
   await projectRepository.create({
     id: 'project-alpha',
     name: 'Project Alpha',
+    description: 'Primary board for product planning and delivery.',
     createdAt: now,
     updatedAt: now
   });

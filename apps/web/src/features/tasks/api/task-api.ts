@@ -62,12 +62,15 @@ export function isTaskApiError(error: unknown): error is TaskApiError {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+
+  if (init?.body !== undefined && init.body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(url, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
-    }
+    headers
   });
 
   if (!response.ok) {

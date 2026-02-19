@@ -237,6 +237,7 @@ async function buildTaskService(): Promise<TaskService> {
   await projectRepository.create({
     id: 'project-alpha',
     name: 'Project Alpha',
+    description: null,
     createdAt: now,
     updatedAt: now
   });
@@ -244,6 +245,7 @@ async function buildTaskService(): Promise<TaskService> {
   await projectRepository.create({
     id: 'board-a',
     name: 'Board A',
+    description: null,
     createdAt: now,
     updatedAt: now
   });
@@ -251,6 +253,7 @@ async function buildTaskService(): Promise<TaskService> {
   await projectRepository.create({
     id: 'board-b',
     name: 'Board B',
+    description: null,
     createdAt: now,
     updatedAt: now
   });

@@ -14,7 +14,7 @@ interface AppSidebarProps {
   onClose: () => void;
   onSelectProject: (projectId: string) => void;
   onCreateProject: (name: string) => Promise<void>;
-  onDeleteProject: (projectId: string) => Promise<void>;
+  onOpenProjectPanel: (projectId: string) => void;
 }
 
 export function AppSidebar({
@@ -26,7 +26,7 @@ export function AppSidebar({
   onClose,
   onSelectProject,
   onCreateProject,
-  onDeleteProject
+  onOpenProjectPanel
 }: AppSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
@@ -135,14 +135,20 @@ export function AppSidebar({
               </button>
               <button
                 type="button"
-                className="project-delete-btn"
-                onClick={() => {
-                  void onDeleteProject(project.id);
-                }}
+                className="project-options-btn"
+                onClick={() => onOpenProjectPanel(project.id)}
                 disabled={isDeletingProjectId === project.id}
-                aria-label={`Delete project ${project.name}`}
+                aria-label={`Open project options ${project.name}`}
               >
-                {isDeletingProjectId === project.id ? '...' : 'Del'}
+                {isDeletingProjectId === project.id ? (
+                  '...'
+                ) : (
+                  <span className="project-options-icon" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                )}
               </button>
             </div>
           ))

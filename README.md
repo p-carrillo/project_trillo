@@ -19,6 +19,43 @@ Task manager fullstack con arquitectura hexagonal en backend, contratos comparti
 - `GET /health/live`
 - `GET /health/ready`
 
+## MCP (`stdio`) para clientes LLM
+El backend expone un runtime MCP separado del HTTP server usando `modules/platform/mcp-main.ts`.
+
+Configuración requerida:
+- `MCP_API_KEY` en entorno.
+- `--api-key=<valor>` al iniciar el proceso.
+- Si falta o no coincide, el proceso falla en startup.
+
+Tools disponibles (paridad API v1):
+- `list_projects`
+- `create_project`
+- `update_project`
+- `delete_project`
+- `list_tasks`
+- `create_task`
+- `update_task`
+- `move_task_status`
+- `delete_task`
+
+Ejecutar en local:
+```bash
+cd modules
+MCP_API_KEY=change-me pnpm mcp:dev
+```
+
+Ejecutar binario compilado:
+```bash
+cd modules
+MCP_API_KEY=change-me pnpm mcp:start
+```
+
+Nota Docker-first:
+- Dentro del contenedor backend, usar:
+```bash
+node modules/dist/platform/mcp-main.js --api-key=$MCP_API_KEY
+```
+
 ## Ejecutar con Docker
 ```bash
 docker compose -f docker/compose.dev.yml up --build

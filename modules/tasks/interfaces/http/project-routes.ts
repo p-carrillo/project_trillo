@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { InvalidProjectNameError, ProjectNameTakenError, ProjectNotFoundError, type Project } from '../../domain';
-import type { CreateProjectInput, ProjectService } from '../../application';
+import {
+  InvalidProjectDescriptionError,
+  InvalidProjectNameError,
+  ProjectNameTakenError,
+  ProjectNotFoundError,
+  type Project
+} from '../../domain';
+import type { CreateProjectInput, ProjectService, UpdateProjectInput } from '../../application';
 
 interface ErrorBody {
   error: {
@@ -54,6 +60,21 @@ export async function registerProjectRoutes(
     });
   });
 
+  fastify.patch('/api/v1/projects/:projectId', async (request, reply) => {
+    return handleRequest(reply, async () => {
+      const projectId = parseProjectId(request.params);
+      const body = parseUpdateProjectBody(request.body);
+      const project = await projectService.updateProject(projectId, body);
+
+      return {
+        statusCode: 200,
+        payload: {
+          data: toProjectDto(project)
+        }
+      };
+    });
+  });
+
   fastify.delete('/api/v1/projects/:projectId', async (request, reply) => {
     return handleRequest(reply, async () => {
       const projectId = parseProjectId(request.params);
@@ -87,13 +108,61 @@ async function handleRequest(
 function parseCreateProjectBody(body: FastifyRequest['body']): CreateProjectInput {
   const input = parseRecordBody(body);
   const name = input.name;
+  const description = input.description;
 
   if (typeof name !== 'string') {
     throw new ValidationError({ name: 'name is required.' });
   }
 
+  if (description !== undefined && description !== null && typeof description !== 'string') {
+    throw new ValidationError({ description: 'description must be a string or null.' });
+  }
+
+  const payload: CreateProjectInput = { name };
+
+  if (typeof description === 'string' || description === null) {
+    payload.description = description;
+  }
+
+  return payload;
+}
+
+function parseUpdateProjectBody(body: FastifyRequest['body']): UpdateProjectInput {
+  const input = parseRecordBody(body);
+  const payload: UpdateProjectInput = {};
+
+  if (input.name !== undefined) {
+    if (typeof input.name !== 'string') {
+      throw new ValidationError({ name: 'name must be a string.' });
+    }
+
+    payload.name = input.name;
+  }
+
+  if (input.description !== undefined) {
+    if (typeof input.description !== 'string' && input.description !== null) {
+      throw new ValidationError({ description: 'description must be a string or null.' });
+    }
+
+    payload.description = input.description;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    throw new ValidationError({
+      body: 'At least one field is required: name, description.'
+    });
+  }
+
+  return payload;
+}
+
+function toProjectDto(project: Project) {
   return {
-    name
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString()
   };
 }
 
@@ -115,15 +184,6 @@ function parseRecordBody(body: FastifyRequest['body']): Record<string, unknown> 
   return body as Record<string, unknown>;
 }
 
-function toProjectDto(project: Project) {
-  return {
-    id: project.id,
-    name: project.name,
-    createdAt: project.createdAt.toISOString(),
-    updatedAt: project.updatedAt.toISOString()
-  };
-}
-
 function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
   if (error instanceof ValidationError) {
     return {
@@ -138,7 +198,7 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
     };
   }
 
-  if (error instanceof InvalidProjectNameError) {
+  if (error instanceof InvalidProjectNameError || error instanceof InvalidProjectDescriptionError) {
     return {
       statusCode: 400,
       body: {

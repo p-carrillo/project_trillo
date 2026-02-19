@@ -2,7 +2,8 @@ import type {
   CreateProjectRequest,
   ListProjectsResponse,
   ProjectDto,
-  ProjectResponse
+  ProjectResponse,
+  UpdateProjectRequest
 } from '@trillo/contracts';
 
 class ProjectApiError extends Error {
@@ -37,17 +38,29 @@ export async function deleteProject(projectId: string): Promise<void> {
   });
 }
 
+export async function updateProject(projectId: string, input: UpdateProjectRequest): Promise<ProjectDto> {
+  const response = await request<ProjectResponse>(`${BASE_PATH}/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  });
+
+  return response.data;
+}
+
 export function isProjectApiError(error: unknown): error is ProjectApiError {
   return error instanceof ProjectApiError;
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+
+  if (init?.body !== undefined && init.body !== null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(url, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
-    }
+    headers
   });
 
   if (!response.ok) {

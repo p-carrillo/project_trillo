@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Standards Review"
+  short_description: "Review code against project standards"
+  default_prompt: "Review current code changes against project standards and return prioritized actionable findings."
