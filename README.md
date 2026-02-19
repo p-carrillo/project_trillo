@@ -94,6 +94,26 @@ corepack pnpm turbo run lint test typecheck build
 ```
 Este comando es obligatorio antes de cerrar cualquier cambio.
 
+## CI/CD (GitHub Actions)
+El repositorio ejecuta un workflow de CI/CD en `/.github/workflows/ci-cd.yml`.
+
+Flujo:
+- `quality-gate`: corre `pnpm turbo run lint test typecheck build` para PRs, pushes y ejecuciones manuales.
+- `deploy`: corre solo tras pasar quality gate en push a `main` (o `workflow_dispatch`) y despliega por SSH con Docker Compose.
+
+Secrets requeridos para deploy:
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PATH`
+
+Despliegue remoto:
+- Sincroniza código por `rsync` al host.
+- Levanta servicios con `docker compose -f docker/compose.dev.yml up -d --build`.
+- Verifica salud en:
+  - `http://localhost:3000/health/ready`
+  - `http://localhost:8080/health/live`
+
 ## Troubleshooting rápido
 - Si aparece `Unexpected API error` al usar endpoints nuevos, confirma que el backend no está desactualizado y reconstruye:
 
