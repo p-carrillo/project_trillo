@@ -10,24 +10,38 @@ import {
 export class InMemoryProjectRepository implements ProjectRepository {
   private readonly projects = new Map<string, Project>();
 
-  async list(): Promise<Project[]> {
-    return Array.from(this.projects.values()).sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+  resolveOwner(projectId: string): string | null {
+    return this.projects.get(projectId)?.ownerUserId ?? null;
   }
 
-  async findById(projectId: string): Promise<Project | null> {
-    return this.projects.get(projectId) ?? null;
+  async listByOwner(userId: string): Promise<Project[]> {
+    return Array.from(this.projects.values())
+      .filter((project) => project.ownerUserId === userId)
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
   }
 
-  async findByName(name: string): Promise<Project | null> {
+  async findById(projectId: string, userId: string): Promise<Project | null> {
+    const project = this.projects.get(projectId);
+
+    if (!project || project.ownerUserId !== userId) {
+      return null;
+    }
+
+    return project;
+  }
+
+  async findByName(name: string, userId: string): Promise<Project | null> {
     const normalized = name.trim().toLowerCase();
 
     return (
-      Array.from(this.projects.values()).find((project) => project.name.toLowerCase() === normalized) ?? null
+      Array.from(this.projects.values()).find(
+        (project) => project.ownerUserId === userId && project.name.toLowerCase() === normalized
+      ) ?? null
     );
   }
 
   async create(project: NewProject): Promise<Project> {
-    const duplicated = await this.findByName(project.name);
+    const duplicated = await this.findByName(project.name, project.ownerUserId);
     if (duplicated) {
       throw new ProjectNameTakenError(project.name);
     }
@@ -37,13 +51,13 @@ export class InMemoryProjectRepository implements ProjectRepository {
     return entity;
   }
 
-  async update(projectId: string, patch: ProjectPatch, updatedAt: Date): Promise<Project> {
-    const current = await this.findById(projectId);
+  async update(projectId: string, userId: string, patch: ProjectPatch, updatedAt: Date): Promise<Project> {
+    const current = await this.findById(projectId, userId);
     if (!current) {
       throw new ProjectNotFoundError(projectId);
     }
 
-    const duplicated = await this.findByName(patch.name);
+    const duplicated = await this.findByName(patch.name, userId);
     if (duplicated && duplicated.id !== projectId) {
       throw new ProjectNameTakenError(patch.name);
     }
@@ -59,8 +73,10 @@ export class InMemoryProjectRepository implements ProjectRepository {
     return updated;
   }
 
-  async delete(projectId: string): Promise<void> {
-    if (!this.projects.has(projectId)) {
+  async delete(projectId: string, userId: string): Promise<void> {
+    const project = await this.findById(projectId, userId);
+
+    if (!project) {
       throw new ProjectNotFoundError(projectId);
     }
 

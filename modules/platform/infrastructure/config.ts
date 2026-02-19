@@ -1,6 +1,10 @@
 export interface PlatformConfig {
   host: string;
   port: number;
+  auth: {
+    jwtAccessSecret: string;
+    jwtAccessExpiresInSeconds: number;
+  };
   database: {
     host: string;
     port: number;
@@ -20,6 +24,9 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   const dbPassword = env.DB_PASSWORD?.trim() || 'trillo';
   const dbName = env.DB_NAME?.trim() || 'trillo';
 
+  const jwtAccessSecret = env.JWT_ACCESS_SECRET?.trim() || 'change-me-in-production';
+  const jwtAccessExpiresInSeconds = parseNumericEnv(env.JWT_ACCESS_EXPIRES_IN, 60 * 60 * 24, 'JWT_ACCESS_EXPIRES_IN');
+
   if (!dbUser || !dbName) {
     throw new Error('DB_USER and DB_NAME are required.');
   }
@@ -27,6 +34,10 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   return {
     host,
     port,
+    auth: {
+      jwtAccessSecret,
+      jwtAccessExpiresInSeconds
+    },
     database: {
       host: dbHost,
       port: dbPort,

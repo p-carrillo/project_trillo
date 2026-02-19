@@ -7,12 +7,28 @@ import {
   TaskService,
   runTaskMigrations
 } from '../tasks';
+import {
+  AuthService,
+  JwtAccessTokenService,
+  MariaDbUserRepository,
+  ScryptPasswordHasher,
+  UserService,
+  runUserMigrations
+} from '../users';
 
 async function start(): Promise<void> {
   const config = loadPlatformConfig(process.env);
   const pool = createDatabasePool(config);
 
-  await runTaskMigrations(pool);
+  const { seedUserId } = await runUserMigrations(pool);
+  await runTaskMigrations(pool, seedUserId);
+
+  const userRepository = new MariaDbUserRepository(pool);
+  const passwordHasher = new ScryptPasswordHasher();
+  const accessTokenService = new JwtAccessTokenService(config.auth.jwtAccessSecret, config.auth.jwtAccessExpiresInSeconds);
+
+  const authService = new AuthService(userRepository, passwordHasher, accessTokenService);
+  const userService = new UserService(userRepository, passwordHasher);
 
   const projectRepository = new MariaDbProjectRepository(pool);
   const taskRepository = new MariaDbTaskRepository(pool);
@@ -22,6 +38,8 @@ async function start(): Promise<void> {
   const server = await createPlatformServer({
     projectService,
     taskService,
+    authService,
+    userService,
     isDatabaseReady: () => checkDatabaseReadiness(pool)
   });
 

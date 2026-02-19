@@ -7,6 +7,7 @@ describe('project-api request headers', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    window.localStorage.clear();
   });
 
   afterEach(() => {

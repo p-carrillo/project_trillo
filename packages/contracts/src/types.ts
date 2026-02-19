@@ -10,6 +10,53 @@ export type TaskType = (typeof taskTypes)[number];
 export type TaskId = string;
 export type BoardId = string;
 export type ProjectId = string;
+export type UserId = string;
+
+export interface UserDto {
+  id: UserId;
+  username: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthSessionMeta {
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+}
+
+export interface AuthSessionResponse {
+  data: UserDto;
+  meta: AuthSessionMeta;
+}
+
+export interface UserResponse {
+  data: UserDto;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  displayName: string;
+  password: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface UpdateUserProfileRequest {
+  email?: string;
+  displayName?: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
 
 export interface ProjectDto {
   id: ProjectId;

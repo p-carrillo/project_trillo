@@ -16,6 +16,7 @@ This file defines mandatory behavior for agents working in this repository.
 - Before marking any code change as done, run the full quality gate: `pnpm turbo run lint test typecheck build` (inside Docker when using Docker-first workflow).
 - If backend code under `/modules` changes, rebuild/restart backend containers before manual verification to avoid stale-runtime false negatives.
 - Keep code quality high: maintainability, clarity, and consistency.
+- Application language must be English for all user-facing UI copy and flows.
 - Docker-first: any runtime assumption must be valid inside Docker containers.
 
 ### Backend
@@ -55,5 +56,6 @@ Create or update an ADR when:
 - Are DB queries restricted to repositories?
 - Are tests present and meaningful (unit/integration/contract/e2e as needed)?
 - Are Docker assumptions valid and documented?
+- Is user-facing application language English?
 - Was an ADR added/updated for architectural or significant dependency changes?
 - Are logs/errors/observability aligned with standards?

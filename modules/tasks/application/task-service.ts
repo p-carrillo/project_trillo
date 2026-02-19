@@ -44,20 +44,20 @@ export class TaskService {
     private readonly now: () => Date = () => new Date()
   ) {}
 
-  async listBoardTasks(boardId: string): Promise<Task[]> {
+  async listBoardTasks(userId: string, boardId: string): Promise<Task[]> {
     const normalizedBoardId = normalizeBoardId(boardId);
-    await this.assertProjectExists(normalizedBoardId);
-    return this.repository.listByBoard(normalizedBoardId);
+    await this.assertProjectExists(userId, normalizedBoardId);
+    return this.repository.listByBoard(normalizedBoardId, userId);
   }
 
-  async createTask(input: CreateTaskInput): Promise<Task> {
+  async createTask(userId: string, input: CreateTaskInput): Promise<Task> {
     const createdAt = this.now();
     const boardId = normalizeBoardId(input.boardId);
-    await this.assertProjectExists(boardId);
+    await this.assertProjectExists(userId, boardId);
     const taskType = normalizeTaskType(input.taskType);
     const epicId = normalizeEpicId(input.epicId);
 
-    await this.assertEpicReference(null, boardId, taskType, epicId);
+    await this.assertEpicReference(userId, null, boardId, taskType, epicId);
 
     return this.repository.create({
       id: randomUUID(),
@@ -74,8 +74,8 @@ export class TaskService {
     });
   }
 
-  async updateTask(taskId: string, input: UpdateTaskInput): Promise<Task> {
-    const current = await this.repository.findById(taskId);
+  async updateTask(userId: string, taskId: string, input: UpdateTaskInput): Promise<Task> {
+    const current = await this.repository.findById(taskId, userId);
     if (!current) {
       throw new TaskNotFoundError(taskId);
     }
@@ -93,13 +93,14 @@ export class TaskService {
     }
 
     if (current.taskType === 'epic' && taskType === 'task') {
-      await this.assertEpicHasNoLinkedTasks(current.boardId, current.id);
+      await this.assertEpicHasNoLinkedTasks(userId, current.boardId, current.id);
     }
 
-    await this.assertEpicReference(taskId, current.boardId, taskType, epicId);
+    await this.assertEpicReference(userId, taskId, current.boardId, taskType, epicId);
 
     return this.repository.update(
       taskId,
+      userId,
       {
         title: input.title === undefined ? current.title : normalizeTaskTitle(input.title),
         description:
@@ -113,8 +114,8 @@ export class TaskService {
     );
   }
 
-  async moveTaskStatus(taskId: string, nextStatus: TaskStatus): Promise<Task> {
-    const current = await this.repository.findById(taskId);
+  async moveTaskStatus(userId: string, taskId: string, nextStatus: TaskStatus): Promise<Task> {
+    const current = await this.repository.findById(taskId, userId);
     if (!current) {
       throw new TaskNotFoundError(taskId);
     }
@@ -123,23 +124,24 @@ export class TaskService {
       return current;
     }
 
-    return this.repository.updateStatus(taskId, nextStatus, this.now());
+    return this.repository.updateStatus(taskId, userId, nextStatus, this.now());
   }
 
-  async deleteTask(taskId: string): Promise<void> {
-    const task = await this.repository.findById(taskId);
+  async deleteTask(userId: string, taskId: string): Promise<void> {
+    const task = await this.repository.findById(taskId, userId);
     if (!task) {
       throw new TaskNotFoundError(taskId);
     }
 
     if (task.taskType === 'epic') {
-      await this.assertEpicHasNoLinkedTasks(task.boardId, task.id);
+      await this.assertEpicHasNoLinkedTasks(userId, task.boardId, task.id);
     }
 
-    await this.repository.delete(taskId);
+    await this.repository.delete(taskId, userId);
   }
 
   private async assertEpicReference(
+    userId: string,
     taskId: string | null,
     boardId: string,
     taskType: TaskType,
@@ -160,7 +162,7 @@ export class TaskService {
       throw new InvalidEpicReferenceError('Task cannot reference itself as epic.');
     }
 
-    const epic = await this.repository.findById(epicId);
+    const epic = await this.repository.findById(epicId, userId);
 
     if (!epic) {
       throw new InvalidEpicReferenceError(`Epic ${epicId} was not found.`);
@@ -175,15 +177,15 @@ export class TaskService {
     }
   }
 
-  private async assertEpicHasNoLinkedTasks(boardId: string, epicId: string): Promise<void> {
-    const linkedTasks = await this.repository.countByEpicId(boardId, epicId);
+  private async assertEpicHasNoLinkedTasks(userId: string, boardId: string, epicId: string): Promise<void> {
+    const linkedTasks = await this.repository.countByEpicId(boardId, epicId, userId);
     if (linkedTasks > 0) {
       throw new EpicHasLinkedTasksError(epicId);
     }
   }
 
-  private async assertProjectExists(projectId: string): Promise<void> {
-    const project = await this.projectRepository.findById(projectId);
+  private async assertProjectExists(userId: string, projectId: string): Promise<void> {
+    const project = await this.projectRepository.findById(projectId, userId);
     if (!project) {
       throw new ProjectNotFoundError(projectId);
     }

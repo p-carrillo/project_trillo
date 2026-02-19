@@ -98,12 +98,14 @@ describe('Task manager MCP tools', () => {
 });
 
 async function createToolset() {
-  const taskRepository = new InMemoryTaskRepository();
   const projectRepository = new InMemoryProjectRepository();
+  const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const now = new Date('2026-02-19T10:00:00.000Z');
+  const actorUserId = 'user-alpha';
 
   await projectRepository.create({
     id: 'project-alpha',
+    ownerUserId: actorUserId,
     name: 'Project Alpha',
     description: 'Primary board for product planning and delivery.',
     createdAt: now,
@@ -114,6 +116,7 @@ async function createToolset() {
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
 
   return createTaskManagerToolset({
+    actorUserId,
     projectService,
     taskService
   });

@@ -26,14 +26,14 @@ export class ProjectService {
     private readonly now: () => Date = () => new Date()
   ) {}
 
-  async listProjects(): Promise<Project[]> {
-    return this.repository.list();
+  async listProjects(userId: string): Promise<Project[]> {
+    return this.repository.listByOwner(userId);
   }
 
-  async createProject(input: CreateProjectInput): Promise<Project> {
+  async createProject(userId: string, input: CreateProjectInput): Promise<Project> {
     const name = normalizeProjectName(input.name);
     const description = normalizeProjectDescription(input.description);
-    const existingProject = await this.repository.findByName(name);
+    const existingProject = await this.repository.findByName(name, userId);
 
     if (existingProject) {
       throw new ProjectNameTakenError(name);
@@ -43,6 +43,7 @@ export class ProjectService {
 
     return this.repository.create({
       id: randomUUID(),
+      ownerUserId: userId,
       name,
       description,
       createdAt,
@@ -50,8 +51,8 @@ export class ProjectService {
     });
   }
 
-  async updateProject(projectId: string, input: UpdateProjectInput): Promise<Project> {
-    const current = await this.repository.findById(projectId);
+  async updateProject(userId: string, projectId: string, input: UpdateProjectInput): Promise<Project> {
+    const current = await this.repository.findById(projectId, userId);
 
     if (!current) {
       throw new ProjectNotFoundError(projectId);
@@ -66,7 +67,7 @@ export class ProjectService {
       : current.description;
 
     if (nextName !== current.name) {
-      const projectWithName = await this.repository.findByName(nextName);
+      const projectWithName = await this.repository.findByName(nextName, userId);
 
       if (projectWithName && projectWithName.id !== current.id) {
         throw new ProjectNameTakenError(nextName);
@@ -75,6 +76,7 @@ export class ProjectService {
 
     return this.repository.update(
       projectId,
+      userId,
       {
         name: nextName,
         description: nextDescription
@@ -83,14 +85,14 @@ export class ProjectService {
     );
   }
 
-  async deleteProject(projectId: string): Promise<void> {
-    const existingProject = await this.repository.findById(projectId);
+  async deleteProject(userId: string, projectId: string): Promise<void> {
+    const existingProject = await this.repository.findById(projectId, userId);
 
     if (!existingProject) {
       throw new ProjectNotFoundError(projectId);
     }
 
-    await this.taskRepository.deleteByBoard(projectId);
-    await this.repository.delete(projectId);
+    await this.taskRepository.deleteByBoard(projectId, userId);
+    await this.repository.delete(projectId, userId);
   }
 }

@@ -1,15 +1,15 @@
 # Trillo Task Manager Monorepo
 
-Task manager fullstack con arquitectura hexagonal en backend, contratos compartidos y ejecución Docker-first.
+Fullstack task manager with Hexagonal Architecture in the backend, shared contracts, and Docker-first execution.
 
-## Estructura relevante
-- `apps/web`: frontend React + Vite con UI kanban inspirada en `.ai/designs`.
-- `modules/tasks`: dominio y casos de uso de tareas, repositorio MariaDB e interfaz HTTP.
-- `modules/platform`: composition root único del backend (Fastify, config, wiring).
-- `packages/contracts`: OpenAPI y tipos compartidos (`trillo.v1.yaml`, `types.ts`).
-- `docker/compose.dev.yml`: stack local (MariaDB + backend + frontend).
+## Relevant Structure
+- `apps/web`: React + Vite frontend with a kanban UI inspired by `.ai/designs`.
+- `modules/tasks`: task domain and use cases, MariaDB repository, and HTTP interface.
+- `modules/platform`: single backend composition root (Fastify, config, wiring).
+- `packages/contracts`: shared OpenAPI and types (`trillo.v1.yaml`, `types.ts`).
+- `docker/compose.dev.yml`: local stack (MariaDB + backend + frontend).
 
-## API principal
+## Main API
 - `GET /api/v1/projects`
 - `POST /api/v1/projects`
 - `DELETE /api/v1/projects/:projectId`
@@ -19,15 +19,15 @@ Task manager fullstack con arquitectura hexagonal en backend, contratos comparti
 - `GET /health/live`
 - `GET /health/ready`
 
-## MCP (`stdio`) para clientes LLM
-El backend expone un runtime MCP separado del HTTP server usando `modules/platform/mcp-main.ts`.
+## MCP (`stdio`) For LLM Clients
+The backend exposes an MCP runtime separate from the HTTP server through `modules/platform/mcp-main.ts`.
 
-Configuración requerida:
-- `MCP_API_KEY` en entorno.
-- `--api-key=<valor>` al iniciar el proceso.
-- Si falta o no coincide, el proceso falla en startup.
+Required configuration:
+- `MCP_API_KEY` in environment.
+- `--api-key=<value>` when starting the process.
+- If missing or mismatched, startup fails.
 
-Tools disponibles (paridad API v1):
+Available tools (API v1 parity):
 - `list_projects`
 - `create_project`
 - `update_project`
@@ -38,36 +38,36 @@ Tools disponibles (paridad API v1):
 - `move_task_status`
 - `delete_task`
 
-Ejecutar en local:
+Run locally:
 ```bash
 cd modules
 MCP_API_KEY=change-me pnpm mcp:dev
 ```
 
-Ejecutar binario compilado:
+Run compiled binary:
 ```bash
 cd modules
 MCP_API_KEY=change-me pnpm mcp:start
 ```
 
-Nota Docker-first:
-- Dentro del contenedor backend, usar:
+Docker-first note:
+- Inside the backend container, use:
 ```bash
 node modules/dist/platform/mcp-main.js --api-key=$MCP_API_KEY
 ```
 
-## Ejecutar con Docker
+## Run With Docker
 ```bash
 docker compose -f docker/compose.dev.yml up --build
 ```
 
-Servicios:
+Services:
 - Frontend: `http://localhost:8080`
 - Backend: `http://localhost:3000`
 - MariaDB: `localhost:3306`
 
-## Desarrollo frontend con hot reload (watch)
-Para cambios inmediatos en UI (Vite + HMR dentro de Docker):
+## Frontend Development With Hot Reload (Watch)
+For immediate UI changes (Vite + HMR inside Docker):
 
 ```bash
 docker compose -f docker/compose.dev.yml up -d mariadb backend web-dev
@@ -76,52 +76,52 @@ docker compose -f docker/compose.dev.yml up -d mariadb backend web-dev
 Frontend dev:
 - `http://localhost:5173`
 
-Notas:
-- `web-dev` usa bind mount del repo y levanta `pnpm dev`.
-- `/api/*` se proxea a `backend` automáticamente desde Vite.
-- Si ya tienes `web` (nginx en `:8080`) corriendo, puedes mantenerlo o pararlo:
+Notes:
+- `web-dev` uses a repo bind mount and runs `pnpm dev`.
+- `/api/*` is automatically proxied to `backend` from Vite.
+- If `web` (nginx on `:8080`) is already running, you can keep it or stop it:
 
 ```bash
 docker compose -f docker/compose.dev.yml stop web
 ```
 
-## Calidad y checks
-Scripts estándar por workspace: `dev`, `build`, `test`, `lint`, `typecheck`.
+## Quality And Checks
+Standard workspace scripts: `dev`, `build`, `test`, `lint`, `typecheck`.
 
-Pipeline monorepo:
+Monorepo pipeline:
 ```bash
 corepack pnpm turbo run lint test typecheck build
 ```
-Este comando es obligatorio antes de cerrar cualquier cambio.
+This command is mandatory before closing any change.
 
 ## CI/CD (GitHub Actions)
-El repositorio ejecuta un workflow de CI/CD en `/.github/workflows/ci-cd.yml`.
+The repository runs a CI/CD workflow in `/.github/workflows/ci-cd.yml`.
 
-Flujo:
-- `quality-gate`: corre `pnpm turbo run lint test typecheck build` para PRs, pushes y ejecuciones manuales.
-- `deploy`: corre solo tras pasar quality gate en push a `main` (o `workflow_dispatch`) y despliega por SSH con Docker Compose.
+Flow:
+- `quality-gate`: runs `pnpm turbo run lint test typecheck build` for PRs, pushes, and manual executions.
+- `deploy`: runs only after the quality gate on pushes to `main` (or `workflow_dispatch`) and deploys via SSH with Docker Compose.
 
-Secrets requeridos para deploy:
+Required deploy secrets:
 - `DEPLOY_SSH_KEY`
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `DEPLOY_PATH`
 
-Despliegue remoto:
-- Sincroniza código por `rsync` al host.
-- Levanta servicios con `docker compose -f docker/compose.dev.yml up -d --build`.
-- Verifica salud en:
+Remote deployment:
+- Syncs code to the host via `rsync`.
+- Starts services with `docker compose -f docker/compose.dev.yml up -d --build`.
+- Verifies health at:
   - `http://localhost:3000/health/ready`
   - `http://localhost:8080/health/live`
 
-## Troubleshooting rápido
-- Si aparece `Unexpected API error` al usar endpoints nuevos, confirma que el backend no está desactualizado y reconstruye:
+## Quick Troubleshooting
+- If `Unexpected API error` appears while using new endpoints, make sure the backend is not stale and rebuild:
 
 ```bash
 docker compose -f docker/compose.dev.yml up -d --build backend
 ```
 
-- Luego valida salud del backend:
+- Then validate backend health:
 
 ```bash
 docker compose -f docker/compose.dev.yml exec -T backend node -e "fetch('http://127.0.0.1:3000/health/ready').then(r=>console.log(r.status)).catch(()=>process.exit(1))"
