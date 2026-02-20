@@ -1,33 +1,28 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthSessionResponse, UserDto } from '@trillo/contracts';
 import { WorkspaceApp } from './features/tasks/ui/workspace-app';
 import { Homepage } from './features/homepage/ui/homepage';
-import { changeMyPassword, isAuthApiError, loginUser, registerUser, updateMyProfile } from './features/auth/api/auth-api';
+import { AlphaAccessPage } from './features/homepage/ui/alpha-access-page';
+import { PublicDocsPage } from './features/homepage/ui/public-docs-page';
+import { changeMyPassword, isAuthApiError, loginUser, updateMyProfile } from './features/auth/api/auth-api';
 import { clearSession, readSession, writeSession, type AuthSession } from './features/auth/session-store';
+import { findPublicDoc } from './features/homepage/content/public-docs';
 
 type AppRoute =
   | {
       type: 'home';
     }
   | {
-      type: 'login';
+      type: 'alpha-access';
     }
   | {
-      type: 'register';
+      type: 'public-docs';
+      slug: string | null;
     }
   | {
       type: 'workspace';
       username: string;
     };
-
-interface RegisterFormState {
-  username: string;
-  usernameConfirmation: string;
-  email: string;
-  displayName: string;
-  password: string;
-  passwordConfirmation: string;
-}
 
 interface LoginFormState {
   username: string;
@@ -44,8 +39,9 @@ interface ProfileFormState {
 
 export function App() {
   const [session, setSession] = useState<AuthSession | null>(() => readSession());
-  const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location.pathname));
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute(normalizeLegacyPath(window.location.pathname)));
   const [isProfilePanelOpen, setIsProfilePanelOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(() => window.location.pathname === '/login');
   const [authError, setAuthError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
@@ -55,22 +51,32 @@ export function App() {
     username: '',
     password: ''
   });
-  const [registerForm, setRegisterForm] = useState<RegisterFormState>({
-    username: '',
-    usernameConfirmation: '',
-    email: '',
-    displayName: '',
-    password: '',
-    passwordConfirmation: ''
-  });
   const [profileForm, setProfileForm] = useState<ProfileFormState>(() =>
     createInitialProfileForm(session?.user ?? null)
   );
   const profileCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const loginCloseButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const normalizedPath = normalizeLegacyPath(window.location.pathname);
+    if (normalizedPath !== window.location.pathname) {
+      window.history.replaceState({}, '', normalizedPath);
+      setRoute(parseRoute(normalizedPath));
+    }
+  }, []);
 
   useEffect(() => {
     function handlePopState() {
-      setRoute(parseRoute(window.location.pathname));
+      const currentPath = window.location.pathname;
+      const normalizedPath = normalizeLegacyPath(currentPath);
+
+      setIsLoginModalOpen(currentPath === '/login');
+
+      if (normalizedPath !== currentPath) {
+        window.history.replaceState({}, '', normalizedPath);
+      }
+
+      setRoute(parseRoute(normalizedPath));
     }
 
     window.addEventListener('popstate', handlePopState);
@@ -87,12 +93,60 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
-    if (!session && route.type === 'workspace') {
-      navigate('/login', true, setRoute);
+    const metaDescription = document.querySelector('meta[name="description"]');
+    const docEntry = route.type === 'public-docs' && route.slug ? findPublicDoc(route.slug) : null;
+
+    if (route.type === 'public-docs') {
+      document.title = docEntry ? `${docEntry.title} | MonoTask Docs` : 'Public Documentation | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          docEntry
+            ? docEntry.summary
+            : 'Public documentation for homepage and footer elements, including roadmap visibility.'
+        );
+      }
       return;
     }
 
-    if (session && (route.type === 'home' || route.type === 'login' || route.type === 'register')) {
+    if (route.type === 'alpha-access') {
+      document.title = 'Private Alpha | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          'Private alpha access information for MonoTask and onboarding contact details.'
+        );
+      }
+      return;
+    }
+
+    if (route.type === 'workspace') {
+      document.title = 'Workspace | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          'MonoTask workspace for planning, task execution, and focused developer workflows.'
+        );
+      }
+      return;
+    }
+
+    document.title = 'MonoTask | Solo Developer Task Manager';
+    if (metaDescription) {
+      metaDescription.setAttribute(
+        'content',
+        'Minimal task manager for solo developers focused on plans, specs, standards, and execution clarity.'
+      );
+    }
+  }, [route]);
+
+  useEffect(() => {
+    if (!session && route.type === 'workspace') {
+      navigate('/', true, setRoute);
+      return;
+    }
+
+    if (session && (route.type === 'home' || route.type === 'alpha-access')) {
       navigate(createWorkspacePath(session.user.username), true, setRoute);
       return;
     }
@@ -103,9 +157,24 @@ export function App() {
   }, [route, session]);
 
   useEffect(() => {
+    if (session && isLoginModalOpen) {
+      setIsLoginModalOpen(false);
+    }
+  }, [session, isLoginModalOpen]);
+
+  useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape' && isProfilePanelOpen) {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (isProfilePanelOpen) {
         setIsProfilePanelOpen(false);
+        return;
+      }
+
+      if (isLoginModalOpen) {
+        setIsLoginModalOpen(false);
       }
     }
 
@@ -114,31 +183,28 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [isProfilePanelOpen]);
+  }, [isLoginModalOpen, isProfilePanelOpen]);
 
   useEffect(() => {
-    if (!isProfilePanelOpen) {
+    if (!isProfilePanelOpen && !isLoginModalOpen) {
       document.body.classList.remove('body-scroll-lock');
       return;
     }
 
-    profileCloseButtonRef.current?.focus();
+    if (isProfilePanelOpen) {
+      profileCloseButtonRef.current?.focus();
+    } else if (isLoginModalOpen) {
+      loginCloseButtonRef.current?.focus();
+    }
+
     document.body.classList.add('body-scroll-lock');
 
     return () => {
       document.body.classList.remove('body-scroll-lock');
     };
-  }, [isProfilePanelOpen]);
+  }, [isLoginModalOpen, isProfilePanelOpen]);
 
   const workspaceUsername = session?.user.username ?? null;
-
-  const authViewTitle = useMemo(() => {
-    if (route.type === 'register') {
-      return 'Register account';
-    }
-
-    return 'Login';
-  }, [route.type]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,39 +218,7 @@ export function App() {
       });
 
       persistSession(response, setSession);
-      navigate(createWorkspacePath(response.data.username), true, setRoute);
-    } catch (error) {
-      setAuthError(mapApiError(error));
-    } finally {
-      setIsSubmittingAuth(false);
-    }
-  }
-
-  async function handleRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (registerForm.username !== registerForm.usernameConfirmation) {
-      setAuthError('Username confirmation does not match.');
-      return;
-    }
-
-    if (registerForm.password !== registerForm.passwordConfirmation) {
-      setAuthError('Password confirmation does not match.');
-      return;
-    }
-
-    setIsSubmittingAuth(true);
-    setAuthError(null);
-
-    try {
-      const response = await registerUser({
-        username: registerForm.username,
-        email: registerForm.email,
-        displayName: registerForm.displayName,
-        password: registerForm.password
-      });
-
-      persistSession(response, setSession);
+      setIsLoginModalOpen(false);
       navigate(createWorkspacePath(response.data.username), true, setRoute);
     } catch (error) {
       setAuthError(mapApiError(error));
@@ -273,157 +307,125 @@ export function App() {
     clearSession();
     setSession(null);
     setIsProfilePanelOpen(false);
-    navigate('/login', true, setRoute);
+    setIsLoginModalOpen(false);
+    navigate('/', true, setRoute);
   }
 
   function handleLogout() {
     clearSession();
     setSession(null);
     setIsProfilePanelOpen(false);
-    navigate('/login', true, setRoute);
+    setIsLoginModalOpen(false);
+    navigate('/', true, setRoute);
   }
 
-  if (route.type === 'home') {
-    if (session) {
-      return null;
-    }
+  function openLoginModal() {
+    setAuthError(null);
+    setIsLoginModalOpen(true);
+  }
+
+  function closeLoginModal() {
+    setIsLoginModalOpen(false);
+  }
+
+  if (route.type === 'home' || route.type === 'alpha-access' || route.type === 'public-docs') {
+    const handleLoginCtaClick = session
+      ? () => navigate(createWorkspacePath(session.user.username), false, setRoute)
+      : openLoginModal;
 
     return (
-      <Homepage
-        onLoginClick={() => navigate('/login', false, setRoute)}
-        onRegisterClick={() => navigate('/register', false, setRoute)}
-      />
+      <>
+        {route.type === 'alpha-access' ? (
+          <AlphaAccessPage onBackHomeClick={() => navigate('/', false, setRoute)} onLoginClick={handleLoginCtaClick} />
+        ) : null}
+
+        {route.type === 'home' ? (
+          <Homepage
+            onLoginClick={handleLoginCtaClick}
+            onDocsClick={() => navigate('/docs', false, setRoute)}
+            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
+            onAlphaAccessClick={() => navigate('/alpha-access', false, setRoute)}
+          />
+        ) : null}
+
+        {route.type === 'public-docs' ? (
+          <PublicDocsPage
+            entry={route.slug ? findPublicDoc(route.slug) : null}
+            onHomeClick={() => navigate('/', false, setRoute)}
+            onLoginClick={handleLoginCtaClick}
+            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
+          />
+        ) : null}
+
+        {!session && isLoginModalOpen ? (
+          <button
+            type="button"
+            className="login-backdrop"
+            onClick={closeLoginModal}
+            aria-label="Close login dialog"
+          />
+        ) : null}
+
+        {!session && isLoginModalOpen ? (
+          <section className="login-modal" role="dialog" aria-label="Login" aria-modal="true">
+            <div className="auth-card login-modal-card">
+              <header className="login-modal-head">
+                <h1>Login</h1>
+                <button
+                  type="button"
+                  ref={loginCloseButtonRef}
+                  className="icon-btn"
+                  onClick={closeLoginModal}
+                  aria-label="Close login modal"
+                >
+                  X
+                </button>
+              </header>
+
+              {authError ? <p className="error-banner">{authError}</p> : null}
+
+              <form className="auth-form" onSubmit={handleLogin}>
+                <label htmlFor="login-modal-username">Username</label>
+                <input
+                  id="login-modal-username"
+                  value={loginForm.username}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, username: event.target.value }))}
+                  required
+                />
+
+                <label htmlFor="login-modal-password">Password</label>
+                <input
+                  id="login-modal-password"
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                  required
+                />
+
+                <div className="auth-actions">
+                  <button type="submit" className="primary-btn" disabled={isSubmittingAuth}>
+                    {isSubmittingAuth ? 'Logging in...' : 'Login'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() => {
+                      setIsLoginModalOpen(false);
+                      navigate('/docs', false, setRoute);
+                    }}
+                  >
+                    Open Public Docs
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+      </>
     );
   }
 
-  if (!session || route.type === 'login' || route.type === 'register') {
-    return (
-      <main className="auth-page" aria-label="Authentication page">
-        <section className="auth-card">
-          <h1>{authViewTitle}</h1>
-          {authError ? <p className="error-banner">{authError}</p> : null}
-
-          {route.type === 'register' ? (
-            <form className="auth-form" onSubmit={handleRegister}>
-              <label htmlFor="register-username">Username</label>
-              <input
-                id="register-username"
-                value={registerForm.username}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, username: event.target.value }))}
-                required
-              />
-
-              <label htmlFor="register-username-confirm">Confirm username</label>
-              <input
-                id="register-username-confirm"
-                value={registerForm.usernameConfirmation}
-                onChange={(event) =>
-                  setRegisterForm((current) => ({
-                    ...current,
-                    usernameConfirmation: event.target.value
-                  }))
-                }
-                required
-              />
-
-              <label htmlFor="register-email">Email</label>
-              <input
-                id="register-email"
-                type="email"
-                value={registerForm.email}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, email: event.target.value }))}
-                required
-              />
-
-              <label htmlFor="register-display-name">Display name</label>
-              <input
-                id="register-display-name"
-                value={registerForm.displayName}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, displayName: event.target.value }))}
-                required
-              />
-
-              <label htmlFor="register-password">Password</label>
-              <input
-                id="register-password"
-                type="password"
-                value={registerForm.password}
-                onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))}
-                required
-              />
-
-              <label htmlFor="register-password-confirm">Confirm password</label>
-              <input
-                id="register-password-confirm"
-                type="password"
-                value={registerForm.passwordConfirmation}
-                onChange={(event) =>
-                  setRegisterForm((current) => ({
-                    ...current,
-                    passwordConfirmation: event.target.value
-                  }))
-                }
-                required
-              />
-
-              <div className="auth-actions">
-                <button type="submit" className="primary-btn" disabled={isSubmittingAuth}>
-                  {isSubmittingAuth ? 'Registering...' : 'Register'}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    setAuthError(null);
-                    navigate('/login', false, setRoute);
-                  }}
-                >
-                  Go to login
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form className="auth-form" onSubmit={handleLogin}>
-              <label htmlFor="login-username">Username</label>
-              <input
-                id="login-username"
-                value={loginForm.username}
-                onChange={(event) => setLoginForm((current) => ({ ...current, username: event.target.value }))}
-                required
-              />
-
-              <label htmlFor="login-password">Password</label>
-              <input
-                id="login-password"
-                type="password"
-                value={loginForm.password}
-                onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
-                required
-              />
-
-              <div className="auth-actions">
-                <button type="submit" className="primary-btn" disabled={isSubmittingAuth}>
-                  {isSubmittingAuth ? 'Logging in...' : 'Login'}
-                </button>
-                <button
-                  type="button"
-                  className="ghost-btn"
-                  onClick={() => {
-                    setAuthError(null);
-                    navigate('/register', false, setRoute);
-                  }}
-                >
-                  Create account
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
-      </main>
-    );
-  }
-
-  if (route.type !== 'workspace' || !workspaceUsername) {
+  if (route.type !== 'workspace' || !workspaceUsername || !session) {
     return null;
   }
 
@@ -545,17 +547,41 @@ export function App() {
   );
 }
 
+function normalizeLegacyPath(pathname: string): string {
+  if (pathname === '/login') {
+    return '/';
+  }
+
+  if (pathname === '/register') {
+    return '/alpha-access';
+  }
+
+  if (pathname === '/docs/docs') {
+    return '/docs';
+  }
+
+  return pathname;
+}
+
 function parseRoute(pathname: string): AppRoute {
+  if (pathname === '/alpha-access') {
+    return { type: 'alpha-access' };
+  }
+
+  if (pathname === '/docs') {
+    return { type: 'public-docs', slug: null };
+  }
+
   if (pathname === '/') {
     return { type: 'home' };
   }
 
-  if (pathname === '/register') {
-    return { type: 'register' };
-  }
-
-  if (pathname === '/login') {
-    return { type: 'login' };
+  const docsMatch = /^\/docs\/([^/]+)$/.exec(pathname);
+  if (docsMatch?.[1]) {
+    return {
+      type: 'public-docs',
+      slug: decodeURIComponent(docsMatch[1])
+    };
   }
 
   const workspaceMatch = /^\/u\/([^/]+)$/.exec(pathname);
@@ -571,6 +597,14 @@ function parseRoute(pathname: string): AppRoute {
 
 function createWorkspacePath(username: string): string {
   return `/u/${encodeURIComponent(username)}`;
+}
+
+function createDocPath(slug: string): string {
+  if (slug === 'docs') {
+    return '/docs';
+  }
+
+  return `/docs/${encodeURIComponent(slug)}`;
 }
 
 function navigate(pathname: string, replace: boolean, setRoute: (route: AppRoute) => void): void {

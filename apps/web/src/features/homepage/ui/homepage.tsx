@@ -1,69 +1,50 @@
+import {
+  developerSignals,
+  footerLinkGroups,
+  homepageFeatureCards
+} from '../content/public-docs';
+
 interface HomepageProps {
   onLoginClick: () => void;
-  onRegisterClick: () => void;
+  onDocsClick: () => void;
+  onDocClick: (slug: string) => void;
+  onAlphaAccessClick: () => void;
 }
 
-const productLinks = ['Features', 'Roadmap', 'Docs', 'Changelog'];
-const resourceLinks = ['Documentation', 'MCP Guide', 'API', 'Support'];
-const developerLinks = ['Task Specs', 'Project Standards', 'Templates', 'IDE Workflow'];
-
-const featureCards = [
-  {
-    title: 'Agentic Planning',
-    description:
-      'Create executable plans from raw ideas with milestones, scope boundaries, and verification checkpoints.'
-  },
-  {
-    title: 'Specs First',
-    description:
-      'Generate technical specs before implementation, including contracts, architecture notes, and test intent.'
-  },
-  {
-    title: 'Minimal Focus',
-    description:
-      'A clean interface for solo developers: less management overhead, more coding momentum.'
-  }
-];
-
-const developerSignalRow = ['Plans', 'Specs', 'Standards', 'Templates', 'MCP'];
-
-export function Homepage({ onLoginClick, onRegisterClick }: HomepageProps) {
+export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessClick }: HomepageProps) {
   return (
-    <main className="homepage" aria-label="Trillo homepage">
+    <main className="homepage" aria-label="MonoTask homepage">
       <header className="homepage-nav">
-        <div className="homepage-brand" aria-label="Trillo">
-          <span className="homepage-brand-mark">T</span>
-          <span className="homepage-brand-name">TrilloTask</span>
+        <div className="homepage-brand" aria-label="MonoTask">
+          <span className="homepage-brand-mark">M</span>
+          <span className="homepage-brand-name">MonoTask</span>
         </div>
 
-        <nav className="homepage-nav-links" aria-label="Homepage sections">
-          <a href="#features">Features</a>
-          <a href="#testimonial">Testimonial</a>
-          <a href="#start">Start</a>
-        </nav>
-
         <div className="homepage-nav-actions">
-          <button type="button" className="homepage-link-muted" onClick={onLoginClick}>
-            Login
+          <button type="button" className="homepage-link-muted" onClick={onDocsClick}>
+            Documentation
           </button>
-          <button type="button" className="primary-btn" onClick={onRegisterClick}>
-            Get Started
+          <button type="button" className="primary-btn" onClick={onLoginClick}>
+            Login
           </button>
         </div>
       </header>
 
       <section className="homepage-hero" aria-labelledby="homepage-title">
         <h1 id="homepage-title">
-          Simplify your <span>agentic workflow</span>
+          The task manager for solo developers
         </h1>
         <p>
-          Remove process noise. Plan tasks, generate specs, enforce project standards, and execute templates directly
-          from your IDE with documented MCP integrations.
+          Plan faster, break down work clearly, and move from epic to done without chaos. MonoTask helps developers
+          manage tasks with structure, speed, and focus.
         </p>
 
         <div className="homepage-hero-actions">
-          <button type="button" className="primary-btn" onClick={onRegisterClick}>
-            Get Started for Free
+          <button type="button" className="primary-btn" onClick={onLoginClick}>
+            Login
+          </button>
+          <button type="button" className="ghost-btn" onClick={onAlphaAccessClick}>
+            Ask for Alpha Access
           </button>
           <a className="homepage-demo-btn" href="#features">
             Learn More
@@ -130,8 +111,19 @@ export function Homepage({ onLoginClick, onRegisterClick }: HomepageProps) {
         <div className="homepage-signals" aria-label="Developer capabilities">
           <p>Built for solo developers working with</p>
           <ul>
-            {developerSignalRow.map((item) => (
-              <li key={item}>{item}</li>
+            {developerSignals.map((item) => (
+              <li key={item.label}>
+                <a
+                  href={createDocPath(item.docSlug)}
+                  className="homepage-link-inline"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onDocClick(item.docSlug);
+                  }}
+                >
+                  {item.label}
+                </a>
+              </li>
             ))}
           </ul>
         </div>
@@ -140,47 +132,38 @@ export function Homepage({ onLoginClick, onRegisterClick }: HomepageProps) {
       <section className="homepage-features" id="features" aria-label="Product features">
         <div className="section-heading">
           <h2>Designed for clarity</h2>
-          <p>Everything needed for agentic delivery, without clutter or enterprise overhead.</p>
+          <p>Everything needed for modern task management, without clutter or enterprise overhead.</p>
         </div>
 
         <div className="homepage-features-grid">
-          {featureCards.map((feature) => (
+          {homepageFeatureCards.map((feature) => (
             <article key={feature.title} className="homepage-feature-card">
               <h3>{feature.title}</h3>
               <p>{feature.description}</p>
+              <a
+                href={createDocPath(feature.docSlug)}
+                className="homepage-link-inline"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onDocClick(feature.docSlug);
+                }}
+              >
+                Open documentation
+              </a>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="homepage-testimonial" id="testimonial" aria-label="Developer testimonial">
-        <img
-          src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1200&q=80"
-          alt="Developer reviewing task specs at a desk"
-          loading="lazy"
-        />
-
-        <div className="testimonial-content">
-          <p className="stars" aria-hidden="true">
-            star star star star star
-          </p>
-          <blockquote>
-            "Trillo keeps exactly what I need in one place: plans, specs, and execution context. I can move from idea to
-            shipped code without switching mental models."
-          </blockquote>
-          <p className="author">Alex Morgan · Indie Developer</p>
-        </div>
-      </section>
-
       <section className="homepage-cta" id="start" aria-label="Call to action">
         <h2>Ready to regain your focus?</h2>
-        <p>Built for developers who want to ship faster with agentic workflows.</p>
+        <p>Built for developers who want to ship faster with structured execution workflows.</p>
         <div className="homepage-cta-actions">
-          <button type="button" className="primary-btn" onClick={onRegisterClick}>
-            Get Started
-          </button>
-          <button type="button" className="ghost-btn" onClick={onLoginClick}>
+          <button type="button" className="primary-btn" onClick={onLoginClick}>
             Login
+          </button>
+          <button type="button" className="ghost-btn" onClick={onDocsClick}>
+            Browse Public Docs
           </button>
         </div>
       </section>
@@ -188,39 +171,42 @@ export function Homepage({ onLoginClick, onRegisterClick }: HomepageProps) {
       <footer className="homepage-footer" aria-label="Homepage footer">
         <div className="footer-brand">
           <div className="homepage-brand">
-            <span className="homepage-brand-mark">T</span>
-            <span className="homepage-brand-name">TrilloTask</span>
+            <span className="homepage-brand-mark">M</span>
+            <span className="homepage-brand-name">MonoTask</span>
           </div>
-          <p>Minimal task management for developer-first, agentic code workflows.</p>
+          <p>Minimal task management for developer-first workflows, with agentic mode on the roadmap.</p>
         </div>
 
-        <nav>
-          <h3>Product</h3>
-          <ul>
-            {productLinks.map((link) => (
-              <li key={link}>{link}</li>
-            ))}
-          </ul>
-        </nav>
-
-        <nav>
-          <h3>Resources</h3>
-          <ul>
-            {resourceLinks.map((link) => (
-              <li key={link}>{link}</li>
-            ))}
-          </ul>
-        </nav>
-
-        <nav>
-          <h3>Developers</h3>
-          <ul>
-            {developerLinks.map((link) => (
-              <li key={link}>{link}</li>
-            ))}
-          </ul>
-        </nav>
+        {footerLinkGroups.map((group) => (
+          <nav key={group.heading} aria-label={`${group.heading} links`}>
+            <h3>{group.heading}</h3>
+            <ul>
+              {group.links.map((link) => (
+                <li key={link.slug}>
+                  <a
+                    href={createDocPath(link.slug)}
+                    className="homepage-footer-link"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onDocClick(link.slug);
+                    }}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
       </footer>
     </main>
   );
+}
+
+function createDocPath(slug: string): string {
+  if (slug === 'docs') {
+    return '/docs';
+  }
+
+  return `/docs/${encodeURIComponent(slug)}`;
 }

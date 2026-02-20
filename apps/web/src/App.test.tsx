@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AuthSessionResponse } from '@trillo/contracts';
 import { App } from './App';
@@ -27,7 +27,6 @@ vi.mock('./features/auth/api/auth-api', () => ({
 }));
 
 const loginUserMock = vi.mocked(authApi.loginUser);
-const registerUserMock = vi.mocked(authApi.registerUser);
 const updateMyProfileMock = vi.mocked(authApi.updateMyProfile);
 const changeMyPasswordMock = vi.mocked(authApi.changeMyPassword);
 
@@ -51,10 +50,9 @@ describe('App auth routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
-    window.history.replaceState({}, '', '/login');
+    window.history.replaceState({}, '', '/');
 
     loginUserMock.mockResolvedValue(sessionResponse);
-    registerUserMock.mockResolvedValue(sessionResponse);
     updateMyProfileMock.mockResolvedValue({
       ...sessionResponse.data,
       displayName: 'John New',
@@ -63,41 +61,36 @@ describe('App auth routing', () => {
     changeMyPasswordMock.mockResolvedValue();
   });
 
-  it('renders login form on /login route', async () => {
+  it('renders homepage on root route', async () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'Login' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The task manager for solo developers' })).toBeInTheDocument();
+    expect(screen.getByText('Built for solo developers working with')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Login' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Ask for Alpha Access' })).toBeInTheDocument();
+  });
+
+  it('opens login modal from homepage', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Login' })[0]!);
+
+    expect(screen.getByRole('dialog', { name: 'Login' })).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
   });
 
-  it('renders homepage on root route', async () => {
-    window.history.replaceState({}, '', '/');
-
-    render(<App />);
-
-    expect(screen.getByRole('heading', { name: 'Simplify your agentic workflow' })).toBeInTheDocument();
-    expect(screen.getByText('Built for solo developers working with')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Get Started for Free' })).toBeInTheDocument();
-  });
-
-  it('navigates to register form from login', async () => {
+  it('logs in from modal and redirects to canonical workspace route', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await user.click(screen.getAllByRole('button', { name: 'Login' })[0]!);
 
-    expect(screen.getByRole('heading', { name: 'Register account' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Confirm username')).toBeInTheDocument();
-  });
-
-  it('logs in and redirects to canonical workspace route', async () => {
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.type(screen.getByLabelText('Username'), 'john_doe');
-    await user.type(screen.getByLabelText('Password'), 'password123');
-    await user.click(screen.getByRole('button', { name: 'Login' }));
+    const loginDialog = screen.getByRole('dialog', { name: 'Login' });
+    await user.type(within(loginDialog).getByLabelText('Username'), 'john_doe');
+    await user.type(within(loginDialog).getByLabelText('Password'), 'password123');
+    await user.click(within(loginDialog).getByRole('button', { name: 'Login' }));
 
     await waitFor(() => {
       expect(loginUserMock).toHaveBeenCalledWith({
@@ -108,6 +101,78 @@ describe('App auth routing', () => {
 
     expect(await screen.findByRole('heading', { name: 'Workspace for john_doe' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/u/john_doe');
+  });
+
+  it('navigates to public documentation page from homepage footer', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('link', { name: 'Documentation' }));
+
+    expect(screen.getByRole('heading', { name: 'Documentation' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/docs/documentation');
+  });
+
+  it('navigates to docs index route from the Docs footer link', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('link', { name: 'Docs' }));
+
+    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/docs');
+  });
+
+  it('navigates to alpha access page from homepage secondary call to action', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Ask for Alpha Access' }));
+
+    expect(screen.getByRole('heading', { name: 'MonoTask is currently in private alpha.' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/alpha-access');
+  });
+
+  it('renders alpha page on /alpha-access route', async () => {
+    window.history.replaceState({}, '', '/alpha-access');
+
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'MonoTask is currently in private alpha.' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'hi@diteria.net' })).toHaveAttribute('href', 'mailto:hi@diteria.net');
+  });
+
+  it('renders public docs detail page on /docs/:slug route', async () => {
+    window.history.replaceState({}, '', '/docs/task-specs');
+
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'Task Specs' })).toBeInTheDocument();
+    expect(screen.getByText('Developers | Available now')).toBeInTheDocument();
+  });
+
+  it('returns to docs index from a docs detail page', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/docs/task-specs');
+
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Open docs index' }));
+
+    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/docs');
+  });
+
+  it('navigates to docs index from breadcrumb on docs detail page', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/docs/task-specs');
+
+    render(<App />);
+
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    await user.click(within(breadcrumb).getByRole('link', { name: 'Docs' }));
+
+    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/docs');
   });
 
   it('redirects mismatched /u/:username to authenticated canonical path', async () => {
@@ -169,7 +234,7 @@ describe('App auth routing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/login');
+      expect(window.location.pathname).toBe('/');
     });
   });
 });

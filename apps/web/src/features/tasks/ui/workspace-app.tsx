@@ -69,6 +69,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
   const [selectedEpicId, setSelectedEpicId] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isRoboModeEnabled, setIsRoboModeEnabled] = useState(false);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -728,8 +729,10 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
           projectName={activeProjectName}
           searchText={searchText}
           canCreateTask={Boolean(selectedProjectId)}
+          isRoboModeEnabled={isRoboModeEnabled}
           onToggleSidebar={handleToggleSidebar}
           onSearchTextChange={setSearchText}
+          onToggleRoboMode={() => setIsRoboModeEnabled((current) => !current)}
           onOpenCreatePanel={handleOpenCreatePanel}
         />
       }
