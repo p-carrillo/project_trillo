@@ -6,8 +6,8 @@
   "types": "dist/platform/main.d.ts",
   "scripts": {
     "dev": "tsx watch platform/main.ts",
-    "mcp:dev": "tsx platform/mcp-main.ts --api-key=$MCP_API_KEY",
-    "mcp:start": "node dist/platform/mcp-main.js --api-key=$MCP_API_KEY",
+    "mcp:dev": "tsx platform/mcp-main.ts --api-key=$MCP_API_KEY --access-token=$MCP_ACCESS_TOKEN",
+    "mcp:start": "node dist/platform/mcp-main.js --api-key=$MCP_API_KEY --access-token=$MCP_ACCESS_TOKEN",
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint . --ext .ts",

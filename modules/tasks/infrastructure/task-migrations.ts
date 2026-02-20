@@ -9,17 +9,26 @@ interface ExistsRow extends RowDataPacket {
   total: number;
 }
 
-export async function runTaskMigrations(pool: Pool): Promise<void> {
+export async function runTaskMigrations(pool: Pool, defaultOwnerUserId: string): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS projects (
       id VARCHAR(64) PRIMARY KEY,
+      owner_user_id CHAR(36) NOT NULL,
       name VARCHAR(120) NOT NULL,
       description TEXT NULL,
       created_at DATETIME(3) NOT NULL,
       updated_at DATETIME(3) NOT NULL,
-      UNIQUE KEY uk_projects_name (name)
+      UNIQUE KEY uk_projects_owner_name (owner_user_id, name),
+      INDEX idx_projects_owner_user_id (owner_user_id)
     )
   `);
+
+  if (!(await hasTableColumn(pool, 'projects', 'owner_user_id'))) {
+    await pool.query(`
+      ALTER TABLE projects
+      ADD COLUMN owner_user_id CHAR(36) NULL AFTER id
+    `);
+  }
 
   if (!(await hasTableColumn(pool, 'projects', 'description'))) {
     await pool.query(`
@@ -28,10 +37,42 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
     `);
   }
 
-  if (!(await hasIndex(pool, 'projects', 'uk_projects_name'))) {
+  await pool.query(
+    `
+    UPDATE projects
+    SET owner_user_id = ?
+    WHERE owner_user_id IS NULL OR owner_user_id = ''
+    `,
+    [defaultOwnerUserId]
+  );
+
+  if (await hasIndex(pool, 'projects', 'uk_projects_name')) {
     await pool.query(`
-      CREATE UNIQUE INDEX uk_projects_name
-      ON projects (name)
+      DROP INDEX uk_projects_name ON projects
+    `);
+  }
+
+  if (!(await hasIndex(pool, 'projects', 'uk_projects_owner_name'))) {
+    await pool.query(`
+      CREATE UNIQUE INDEX uk_projects_owner_name
+      ON projects (owner_user_id, name)
+    `);
+  }
+
+  if (!(await hasIndex(pool, 'projects', 'idx_projects_owner_user_id'))) {
+    await pool.query(`
+      CREATE INDEX idx_projects_owner_user_id
+      ON projects (owner_user_id)
+    `);
+  }
+
+  if (!(await hasForeignKey(pool, 'projects', 'fk_projects_owner_user_id_users'))) {
+    await pool.query(`
+      ALTER TABLE projects
+      ADD CONSTRAINT fk_projects_owner_user_id_users
+      FOREIGN KEY (owner_user_id) REFERENCES users(id)
+      ON UPDATE CASCADE
+      ON DELETE RESTRICT
     `);
   }
 
@@ -76,23 +117,26 @@ export async function runTaskMigrations(pool: Pool): Promise<void> {
 
   await pool.query(
     `
-    INSERT INTO projects (id, name, description, created_at, updated_at)
-    VALUES ('project-alpha', 'Project Alpha', 'Primary board for product planning and delivery.', NOW(3), NOW(3))
+    INSERT INTO projects (id, owner_user_id, name, description, created_at, updated_at)
+    VALUES ('project-alpha', ?, 'Project Alpha', 'Primary board for product planning and delivery.', NOW(3), NOW(3))
     ON DUPLICATE KEY UPDATE
+      owner_user_id = VALUES(owner_user_id),
       name = VALUES(name),
       description = IFNULL(description, VALUES(description)),
       updated_at = VALUES(updated_at)
-    `
+    `,
+    [defaultOwnerUserId]
   );
 
   await pool.query(
     `
-    INSERT INTO projects (id, name, description, created_at, updated_at)
-    SELECT DISTINCT t.board_id, t.board_id, NULL, NOW(3), NOW(3)
+    INSERT INTO projects (id, owner_user_id, name, description, created_at, updated_at)
+    SELECT DISTINCT t.board_id, ?, t.board_id, NULL, NOW(3), NOW(3)
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.board_id
     WHERE p.id IS NULL
-    `
+    `,
+    [defaultOwnerUserId]
   );
 
   if (!(await hasForeignKey(pool, 'tasks', 'fk_tasks_board_id_projects'))) {

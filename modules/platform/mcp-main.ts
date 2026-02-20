@@ -1,23 +1,48 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createPlatformMcpServer } from './application';
 import { createDatabasePool, loadMcpApiKey, loadPlatformConfig, type PlatformConfig } from './infrastructure';
-import { MariaDbProjectRepository, MariaDbTaskRepository, ProjectService, TaskService, runTaskMigrations } from '../tasks';
+import {
+  MariaDbProjectRepository,
+  MariaDbTaskRepository,
+  ProjectService,
+  TaskService,
+  runTaskMigrations
+} from '../tasks';
+import {
+  AuthService,
+  JwtAccessTokenService,
+  MariaDbUserRepository,
+  ScryptPasswordHasher,
+  runUserMigrations
+} from '../users';
 
 interface McpRuntimeContext {
   config: PlatformConfig;
+  accessToken: string;
 }
 
 async function start(): Promise<void> {
   const runtime = loadMcpRuntimeContext(process.env, process.argv.slice(2));
   const pool = createDatabasePool(runtime.config);
 
-  await runTaskMigrations(pool);
+  const { seedUserId } = await runUserMigrations(pool);
+  await runTaskMigrations(pool, seedUserId);
+
+  const userRepository = new MariaDbUserRepository(pool);
+  const authService = new AuthService(
+    userRepository,
+    new ScryptPasswordHasher(),
+    new JwtAccessTokenService(runtime.config.auth.jwtAccessSecret, runtime.config.auth.jwtAccessExpiresInSeconds)
+  );
+
+  const actor = await authService.authenticateAccessToken(runtime.accessToken);
 
   const projectRepository = new MariaDbProjectRepository(pool);
   const taskRepository = new MariaDbTaskRepository(pool);
   const projectService = new ProjectService(projectRepository, taskRepository);
   const taskService = new TaskService(taskRepository, projectRepository);
   const server = createPlatformMcpServer({
+    actorUserId: actor.userId,
     projectService,
     taskService
   });
@@ -57,41 +82,49 @@ function loadMcpRuntimeContext(env: NodeJS.ProcessEnv, args: string[]): McpRunti
   const config = loadPlatformConfig(env);
   const configuredApiKey = loadMcpApiKey(env);
 
-  const providedApiKey = parseApiKeyArgument(args);
+  const providedApiKey = parseArgument(args, 'api-key');
   if (providedApiKey !== configuredApiKey) {
     throw new Error('Invalid MCP API key.');
   }
 
+  const accessToken = parseArgument(args, 'access-token');
+
   return {
-    config
+    config,
+    accessToken
   };
 }
 
-function parseApiKeyArgument(args: string[]): string {
+function parseArgument(args: string[], name: string): string {
+  const longForm = `--${name}`;
+  const inlinePrefix = `${longForm}=`;
+
   for (let index = 0; index < args.length; index += 1) {
     const current = args[index];
     if (!current) {
       continue;
     }
 
-    if (current === '--api-key') {
+    if (current === longForm) {
       const value = args[index + 1];
       if (!value || value.trim().length === 0) {
-        throw new Error('Missing value for --api-key.');
+        throw new Error(`Missing value for ${longForm}.`);
       }
-      return value;
+
+      return value.trim();
     }
 
-    if (current.startsWith('--api-key=')) {
-      const value = current.slice('--api-key='.length).trim();
+    if (current.startsWith(inlinePrefix)) {
+      const value = current.slice(inlinePrefix.length).trim();
       if (value.length === 0) {
-        throw new Error('Missing value for --api-key.');
+        throw new Error(`Missing value for ${longForm}.`);
       }
+
       return value;
     }
   }
 
-  throw new Error('Missing required --api-key argument.');
+  throw new Error(`Missing required ${longForm} argument.`);
 }
 
 async function closeMcpServer(server: { close?: () => Promise<void> }): Promise<void> {

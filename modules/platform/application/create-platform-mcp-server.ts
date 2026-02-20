@@ -16,6 +16,7 @@ export function createPlatformMcpServer(dependencies: PlatformMcpDependencies): 
   );
 
   registerTaskManagerTools(server, {
+    actorUserId: dependencies.actorUserId,
     projectService: dependencies.projectService,
     taskService: dependencies.taskService
   });

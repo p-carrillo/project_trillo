@@ -2,6 +2,7 @@ import { InvalidBoardIdError, InvalidProjectDescriptionError, InvalidProjectName
 
 export interface Project {
   id: string;
+  ownerUserId: string;
   name: string;
   description: string | null;
   createdAt: Date;
@@ -10,6 +11,7 @@ export interface Project {
 
 export interface NewProject {
   id: string;
+  ownerUserId: string;
   name: string;
   description: string | null;
   createdAt: Date;

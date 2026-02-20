@@ -9,11 +9,14 @@ import {
 import { InMemoryProjectRepository } from './helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from './helpers/in-memory-task-repository';
 
+const USER_ALPHA = 'user-alpha';
+const USER_BETA = 'user-beta';
+
 describe('TaskService', () => {
   it('creates a task with normalized fields and defaults taskType to task', async () => {
     const service = await buildTaskService();
 
-    const task = await service.createTask({
+    const task = await service.createTask(USER_ALPHA, {
       boardId: ' project-alpha ',
       title: '  Prepare weekly report  ',
       category: ' Ops ',
@@ -32,7 +35,7 @@ describe('TaskService', () => {
   it('creates an epic task', async () => {
     const service = await buildTaskService();
 
-    const epic = await service.createTask({
+    const epic = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Website Redesign',
       category: 'Product',
@@ -47,7 +50,7 @@ describe('TaskService', () => {
     const service = await buildTaskService();
 
     await expect(
-      service.createTask({
+      service.createTask(USER_ALPHA, {
         boardId: 'project-alpha',
         title: 'Platform Refresh',
         category: 'Product',
@@ -61,7 +64,7 @@ describe('TaskService', () => {
     const service = await buildTaskService();
 
     await expect(
-      service.createTask({
+      service.createTask(USER_ALPHA, {
         boardId: 'project-alpha',
         title: 'Implement scope',
         category: 'Dev',
@@ -74,14 +77,14 @@ describe('TaskService', () => {
   it('rejects tasks linked to non-epic cards', async () => {
     const service = await buildTaskService();
 
-    const regularTask = await service.createTask({
+    const regularTask = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Existing task',
       category: 'Dev'
     });
 
     await expect(
-      service.createTask({
+      service.createTask(USER_ALPHA, {
         boardId: 'project-alpha',
         title: 'Child task',
         category: 'Dev',
@@ -93,7 +96,7 @@ describe('TaskService', () => {
   it('rejects tasks linked to epic from another board', async () => {
     const service = await buildTaskService();
 
-    const epic = await service.createTask({
+    const epic = await service.createTask(USER_ALPHA, {
       boardId: 'board-a',
       title: 'Shared epic',
       category: 'Product',
@@ -101,7 +104,7 @@ describe('TaskService', () => {
     });
 
     await expect(
-      service.createTask({
+      service.createTask(USER_ALPHA, {
         boardId: 'board-b',
         title: 'Task in board B',
         category: 'Ops',
@@ -113,14 +116,14 @@ describe('TaskService', () => {
   it('rejects listing tasks from unknown project', async () => {
     const service = await buildTaskService();
 
-    await expect(service.listBoardTasks('unknown-project')).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(service.listBoardTasks(USER_ALPHA, 'unknown-project')).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
   it('rejects creating a task in an unknown project', async () => {
     const service = await buildTaskService();
 
     await expect(
-      service.createTask({
+      service.createTask(USER_ALPHA, {
         boardId: 'unknown-project',
         title: 'Ghost task',
         category: 'Ops'
@@ -131,33 +134,33 @@ describe('TaskService', () => {
   it('allows moving backward from done to todo', async () => {
     const service = await buildTaskService();
 
-    const task = await service.createTask({
+    const task = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Deploy patch',
       category: 'DevOps'
     });
 
-    await service.moveTaskStatus(task.id, 'done');
-    const movedBack = await service.moveTaskStatus(task.id, 'todo');
+    await service.moveTaskStatus(USER_ALPHA, task.id, 'done');
+    const movedBack = await service.moveTaskStatus(USER_ALPHA, task.id, 'todo');
     expect(movedBack.status).toBe('todo');
   });
 
   it('throws when task does not exist', async () => {
     const service = await buildTaskService();
 
-    await expect(service.moveTaskStatus('missing-id', 'in_progress')).rejects.toBeInstanceOf(TaskNotFoundError);
+    await expect(service.moveTaskStatus(USER_ALPHA, 'missing-id', 'in_progress')).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 
   it('updates task details', async () => {
     const service = await buildTaskService();
 
-    const task = await service.createTask({
+    const task = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Prepare release',
       category: 'Ops'
     });
 
-    const updated = await service.updateTask(task.id, {
+    const updated = await service.updateTask(USER_ALPHA, task.id, {
       title: 'Prepare release plan',
       category: 'Product',
       priority: 'high',
@@ -173,14 +176,14 @@ describe('TaskService', () => {
   it('rejects converting epic to task while linked tasks exist', async () => {
     const service = await buildTaskService();
 
-    const epic = await service.createTask({
+    const epic = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Program Increment',
       category: 'Product',
       taskType: 'epic'
     });
 
-    await service.createTask({
+    await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Deliver feature',
       category: 'Dev',
@@ -188,7 +191,7 @@ describe('TaskService', () => {
     });
 
     await expect(
-      service.updateTask(epic.id, {
+      service.updateTask(USER_ALPHA, epic.id, {
         taskType: 'task'
       })
     ).rejects.toBeInstanceOf(EpicHasLinkedTasksError);
@@ -197,45 +200,58 @@ describe('TaskService', () => {
   it('deletes regular tasks', async () => {
     const service = await buildTaskService();
 
-    const task = await service.createTask({
+    const task = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Cleanup stale feature flags',
       category: 'DevOps'
     });
 
-    await service.deleteTask(task.id);
+    await service.deleteTask(USER_ALPHA, task.id);
 
-    await expect(service.moveTaskStatus(task.id, 'done')).rejects.toBeInstanceOf(TaskNotFoundError);
+    await expect(service.moveTaskStatus(USER_ALPHA, task.id, 'done')).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 
   it('rejects deleting epic with linked tasks', async () => {
     const service = await buildTaskService();
 
-    const epic = await service.createTask({
+    const epic = await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Security hardening',
       category: 'Platform',
       taskType: 'epic'
     });
 
-    await service.createTask({
+    await service.createTask(USER_ALPHA, {
       boardId: 'project-alpha',
       title: 'Rotate keys',
       category: 'Platform',
       epicId: epic.id
     });
 
-    await expect(service.deleteTask(epic.id)).rejects.toBeInstanceOf(EpicHasLinkedTasksError);
+    await expect(service.deleteTask(USER_ALPHA, epic.id)).rejects.toBeInstanceOf(EpicHasLinkedTasksError);
+  });
+
+  it('prevents cross-user task access with task_not_found', async () => {
+    const service = await buildTaskService();
+
+    const task = await service.createTask(USER_ALPHA, {
+      boardId: 'project-alpha',
+      title: 'Private task',
+      category: 'Ops'
+    });
+
+    await expect(service.updateTask(USER_BETA, task.id, { title: 'Illegal edit' })).rejects.toBeInstanceOf(TaskNotFoundError);
   });
 });
 
 async function buildTaskService(): Promise<TaskService> {
-  const taskRepository = new InMemoryTaskRepository();
   const projectRepository = new InMemoryProjectRepository();
+  const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const now = new Date('2026-02-17T10:00:00.000Z');
 
   await projectRepository.create({
     id: 'project-alpha',
+    ownerUserId: USER_ALPHA,
     name: 'Project Alpha',
     description: null,
     createdAt: now,
@@ -244,6 +260,7 @@ async function buildTaskService(): Promise<TaskService> {
 
   await projectRepository.create({
     id: 'board-a',
+    ownerUserId: USER_ALPHA,
     name: 'Board A',
     description: null,
     createdAt: now,
@@ -252,7 +269,17 @@ async function buildTaskService(): Promise<TaskService> {
 
   await projectRepository.create({
     id: 'board-b',
+    ownerUserId: USER_ALPHA,
     name: 'Board B',
+    description: null,
+    createdAt: now,
+    updatedAt: now
+  });
+
+  await projectRepository.create({
+    id: 'beta-board',
+    ownerUserId: USER_BETA,
+    name: 'Beta Board',
     description: null,
     createdAt: now,
     updatedAt: now

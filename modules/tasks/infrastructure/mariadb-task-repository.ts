@@ -25,43 +25,46 @@ interface TaskRow extends RowDataPacket {
 export class MariaDbTaskRepository implements TaskRepository {
   constructor(private readonly pool: Pool) {}
 
-  async listByBoard(boardId: string): Promise<Task[]> {
+  async listByBoard(boardId: string, userId: string): Promise<Task[]> {
     const [rows] = await this.pool.query<TaskRow[]>(
       `
-      SELECT id, board_id, title, description, category, priority, status, task_type, epic_id, created_at, updated_at
-      FROM tasks
-      WHERE board_id = ?
-      ORDER BY FIELD(status, 'todo', 'in_progress', 'done'), updated_at DESC
+      SELECT t.id, t.board_id, t.title, t.description, t.category, t.priority, t.status, t.task_type, t.epic_id, t.created_at, t.updated_at
+      FROM tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      WHERE t.board_id = ? AND p.owner_user_id = ?
+      ORDER BY FIELD(t.status, 'todo', 'in_progress', 'done'), t.updated_at DESC
       `,
-      [boardId]
+      [boardId, userId]
     );
 
     return rows.map((row) => this.mapRowToTask(row));
   }
 
-  async findById(taskId: string): Promise<Task | null> {
+  async findById(taskId: string, userId: string): Promise<Task | null> {
     const [rows] = await this.pool.query<TaskRow[]>(
       `
-      SELECT id, board_id, title, description, category, priority, status, task_type, epic_id, created_at, updated_at
-      FROM tasks
-      WHERE id = ?
+      SELECT t.id, t.board_id, t.title, t.description, t.category, t.priority, t.status, t.task_type, t.epic_id, t.created_at, t.updated_at
+      FROM tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      WHERE t.id = ? AND p.owner_user_id = ?
       LIMIT 1
       `,
-      [taskId]
+      [taskId, userId]
     );
 
     const row = rows[0];
     return row ? this.mapRowToTask(row) : null;
   }
 
-  async countByEpicId(boardId: string, epicId: string): Promise<number> {
+  async countByEpicId(boardId: string, epicId: string, userId: string): Promise<number> {
     const [rows] = await this.pool.query<Array<RowDataPacket & { total: number }>>(
       `
       SELECT COUNT(*) AS total
-      FROM tasks
-      WHERE board_id = ? AND epic_id = ?
+      FROM tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      WHERE t.board_id = ? AND t.epic_id = ? AND p.owner_user_id = ?
       `,
-      [boardId, epicId]
+      [boardId, epicId, userId]
     );
 
     return rows[0]?.total ?? 0;
@@ -88,29 +91,40 @@ export class MariaDbTaskRepository implements TaskRepository {
       ]
     );
 
-    const created = await this.findById(task.id);
+    const [rows] = await this.pool.query<TaskRow[]>(
+      `
+      SELECT id, board_id, title, description, category, priority, status, task_type, epic_id, created_at, updated_at
+      FROM tasks
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [task.id]
+    );
+
+    const created = rows[0];
     if (!created) {
       throw new TaskNotFoundError(task.id);
     }
 
-    return created;
+    return this.mapRowToTask(created);
   }
 
-  async updateStatus(taskId: string, status: TaskStatus, updatedAt: Date): Promise<Task> {
+  async updateStatus(taskId: string, userId: string, status: TaskStatus, updatedAt: Date): Promise<Task> {
     const [result] = await this.pool.query<ResultSetHeader>(
       `
-      UPDATE tasks
-      SET status = ?, updated_at = ?
-      WHERE id = ?
+      UPDATE tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      SET t.status = ?, t.updated_at = ?
+      WHERE t.id = ? AND p.owner_user_id = ?
       `,
-      [status, updatedAt, taskId]
+      [status, updatedAt, taskId, userId]
     );
 
     if (result.affectedRows === 0) {
       throw new TaskNotFoundError(taskId);
     }
 
-    const updated = await this.findById(taskId);
+    const updated = await this.findById(taskId, userId);
     if (!updated) {
       throw new TaskNotFoundError(taskId);
     }
@@ -118,28 +132,29 @@ export class MariaDbTaskRepository implements TaskRepository {
     return updated;
   }
 
-  async update(taskId: string, patch: TaskPatch, updatedAt: Date): Promise<Task> {
+  async update(taskId: string, userId: string, patch: TaskPatch, updatedAt: Date): Promise<Task> {
     const [result] = await this.pool.query<ResultSetHeader>(
       `
-      UPDATE tasks
+      UPDATE tasks t
+      INNER JOIN projects p ON p.id = t.board_id
       SET
-        title = ?,
-        description = ?,
-        category = ?,
-        priority = ?,
-        task_type = ?,
-        epic_id = ?,
-        updated_at = ?
-      WHERE id = ?
+        t.title = ?,
+        t.description = ?,
+        t.category = ?,
+        t.priority = ?,
+        t.task_type = ?,
+        t.epic_id = ?,
+        t.updated_at = ?
+      WHERE t.id = ? AND p.owner_user_id = ?
       `,
-      [patch.title, patch.description, patch.category, patch.priority, patch.taskType, patch.epicId, updatedAt, taskId]
+      [patch.title, patch.description, patch.category, patch.priority, patch.taskType, patch.epicId, updatedAt, taskId, userId]
     );
 
     if (result.affectedRows === 0) {
       throw new TaskNotFoundError(taskId);
     }
 
-    const updated = await this.findById(taskId);
+    const updated = await this.findById(taskId, userId);
     if (!updated) {
       throw new TaskNotFoundError(taskId);
     }
@@ -147,13 +162,15 @@ export class MariaDbTaskRepository implements TaskRepository {
     return updated;
   }
 
-  async delete(taskId: string): Promise<void> {
+  async delete(taskId: string, userId: string): Promise<void> {
     const [result] = await this.pool.query<ResultSetHeader>(
       `
-      DELETE FROM tasks
-      WHERE id = ?
+      DELETE t
+      FROM tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      WHERE t.id = ? AND p.owner_user_id = ?
       `,
-      [taskId]
+      [taskId, userId]
     );
 
     if (result.affectedRows === 0) {
@@ -161,13 +178,15 @@ export class MariaDbTaskRepository implements TaskRepository {
     }
   }
 
-  async deleteByBoard(boardId: string): Promise<void> {
+  async deleteByBoard(boardId: string, userId: string): Promise<void> {
     await this.pool.query(
       `
-      DELETE FROM tasks
-      WHERE board_id = ?
+      DELETE t
+      FROM tasks t
+      INNER JOIN projects p ON p.id = t.board_id
+      WHERE t.board_id = ? AND p.owner_user_id = ?
       `,
-      [boardId]
+      [boardId, userId]
     );
   }
 

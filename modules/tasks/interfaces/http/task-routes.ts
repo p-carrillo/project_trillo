@@ -36,12 +36,18 @@ class ValidationError extends Error {
 
 export async function registerTaskRoutes(
   fastify: FastifyInstance,
-  taskService: TaskService
+  taskService: TaskService,
+  resolveAuthenticatedUser: (request: FastifyRequest) => Promise<string | null>
 ): Promise<void> {
   fastify.get('/api/v1/tasks', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const boardId = parseBoardId(request.query);
-      const tasks = await taskService.listBoardTasks(boardId);
+      const tasks = await taskService.listBoardTasks(userId, boardId);
       return {
         statusCode: 200,
         payload: {
@@ -57,8 +63,13 @@ export async function registerTaskRoutes(
 
   fastify.post('/api/v1/tasks', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const body = parseCreateTaskBody(request.body);
-      const task = await taskService.createTask(body);
+      const task = await taskService.createTask(userId, body);
 
       return {
         statusCode: 201,
@@ -71,9 +82,14 @@ export async function registerTaskRoutes(
 
   fastify.patch('/api/v1/tasks/:taskId/status', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const taskId = parseTaskId(request.params);
       const nextStatus = parseMoveStatusBody(request.body);
-      const task = await taskService.moveTaskStatus(taskId, nextStatus);
+      const task = await taskService.moveTaskStatus(userId, taskId, nextStatus);
 
       return {
         statusCode: 200,
@@ -86,9 +102,14 @@ export async function registerTaskRoutes(
 
   fastify.patch('/api/v1/tasks/:taskId', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const taskId = parseTaskId(request.params);
       const body = parseUpdateTaskBody(request.body);
-      const task = await taskService.updateTask(taskId, body);
+      const task = await taskService.updateTask(userId, taskId, body);
 
       return {
         statusCode: 200,
@@ -101,14 +122,31 @@ export async function registerTaskRoutes(
 
   fastify.delete('/api/v1/tasks/:taskId', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const taskId = parseTaskId(request.params);
-      await taskService.deleteTask(taskId);
+      await taskService.deleteTask(userId, taskId);
 
       return {
         statusCode: 204
       };
     });
   });
+}
+
+function unauthorizedResponse() {
+  return {
+    statusCode: 401,
+    payload: {
+      error: {
+        code: 'unauthorized',
+        message: 'Missing or invalid authentication token.'
+      }
+    }
+  };
 }
 
 async function handleRequest(

@@ -1,185 +1,166 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { taskStatuses, type CreateTaskRequest, type ProjectDto, type TaskDto, type TaskStatus, type UpdateTaskRequest } from '@trillo/contracts';
-import {
-  createTask,
-  deleteTask,
-  fetchTasks,
-  isTaskApiError,
-  moveTaskStatus,
-  updateTask
-} from './features/tasks/api/task-api';
-import {
-  createProject as createProjectRecord,
-  deleteProject as deleteProjectRecord,
-  fetchProjects,
-  isProjectApiError,
-  updateProject as updateProjectRecord
-} from './features/tasks/api/project-api';
-import { buildTaskBoardColumns } from './features/tasks/board/board-model';
-import { AppShell } from './features/tasks/ui/app-shell';
-import { AppSidebar } from './features/tasks/ui/app-sidebar';
-import { BoardHeader } from './features/tasks/ui/board-header';
-import { TaskBoard } from './features/tasks/ui/task-board';
-import { CreateTaskPanel } from './features/tasks/ui/create-task-panel';
-import { EditProjectPanel } from './features/tasks/ui/edit-project-panel';
-import { ConfirmActionDialog } from './features/tasks/ui/confirm-action-dialog';
-import { EpicTabs } from './features/tasks/ui/epic-tabs';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { AuthSessionResponse, UserDto } from '@trillo/contracts';
+import { WorkspaceApp } from './features/tasks/ui/workspace-app';
+import { Homepage } from './features/homepage/ui/homepage';
+import { AlphaAccessPage } from './features/homepage/ui/alpha-access-page';
+import { PublicDocsPage } from './features/homepage/ui/public-docs-page';
+import { changeMyPassword, isAuthApiError, loginUser, updateMyProfile } from './features/auth/api/auth-api';
+import { clearSession, readSession, writeSession, type AuthSession } from './features/auth/session-store';
+import { findPublicDoc } from './features/homepage/content/public-docs';
 
-const ACTIVE_PROJECT_STORAGE_KEY = 'trillo.active-project.v1';
-const CUSTOM_COLUMNS_STORAGE_KEY_PREFIX = 'trillo.custom-columns.v2.';
-const COLUMN_LABELS_STORAGE_KEY_PREFIX = 'trillo.column-label-overrides.v1.';
-const MAX_CUSTOM_COLUMNS = 8;
-
-interface CustomColumn {
-  id: string;
-  label: string;
-}
-
-interface ProjectFormState {
-  name: string;
-  description: string;
-}
-
-type DeleteTarget =
+type AppRoute =
   | {
-      type: 'project';
-      id: string;
-      name: string;
+      type: 'home';
     }
   | {
-      type: 'task';
-      id: string;
-      title: string;
+      type: 'alpha-access';
+    }
+  | {
+      type: 'public-docs';
+      slug: string | null;
+    }
+  | {
+      type: 'workspace';
+      username: string;
     };
 
-type ColumnLabelOverrides = Partial<Record<TaskStatus, string>>;
+interface LoginFormState {
+  username: string;
+  password: string;
+}
+
+interface ProfileFormState {
+  email: string;
+  displayName: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
 
 export function App() {
-  const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => loadActiveProjectId());
-  const [tasks, setTasks] = useState<TaskDto[]>([]);
-  const [searchText, setSearchText] = useState('');
-  const [form, setForm] = useState<CreateTaskRequest>(() => createInitialForm(loadActiveProjectId()));
-  const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
-  const [selectedEpicId, setSelectedEpicId] = useState('all');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
-  const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [projectForm, setProjectForm] = useState<ProjectFormState>({
-    name: '',
-    description: ''
+  const [session, setSession] = useState<AuthSession | null>(() => readSession());
+  const [route, setRoute] = useState<AppRoute>(() => parseRoute(normalizeLegacyPath(window.location.pathname)));
+  const [isProfilePanelOpen, setIsProfilePanelOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(() => window.location.pathname === '/login');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [loginForm, setLoginForm] = useState<LoginFormState>({
+    username: '',
+    password: ''
   });
-  const [columnLabelOverrides, setColumnLabelOverrides] = useState<ColumnLabelOverrides>({});
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
-  const [isSubmittingProject, setIsSubmittingProject] = useState(false);
-  const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const [isDeletingProjectId, setIsDeletingProjectId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
+  const [profileForm, setProfileForm] = useState<ProfileFormState>(() =>
+    createInitialProfileForm(session?.user ?? null)
   );
-  const editingProject = useMemo(
-    () => projects.find((project) => project.id === editingProjectId) ?? null,
-    [editingProjectId, projects]
-  );
-  const activeProjectName = selectedProject?.name ?? 'Select a project';
-  const isAnyPanelOpen = isCreatePanelOpen || isProjectPanelOpen;
-  const panelCloseLabel = isProjectPanelOpen ? 'Close edit project panel' : 'Close create task panel';
-  const confirmDialogTitle = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
-  const confirmDialogMessage =
-    deleteTarget?.type === 'project'
-      ? `Delete project "${deleteTarget.name}"? This will remove all tasks, epics and board data from this project.`
-      : deleteTarget
-        ? `Delete task "${deleteTarget.title}"?`
-        : '';
-  const confirmDialogActionLabel = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
-
-  const normalizedTasks = useMemo(() => tasks.map((task) => normalizeTaskDto(task)), [tasks]);
-  const epics = useMemo(
-    () =>
-      normalizedTasks
-        .filter((task) => task.taskType === 'epic')
-        .map((task) => ({ id: task.id, title: task.title })),
-    [normalizedTasks]
-  );
-  const columns = useMemo(
-    () => buildTaskBoardColumns(normalizedTasks, searchText, selectedEpicId),
-    [normalizedTasks, searchText, selectedEpicId]
-  );
-  const displayColumns = useMemo(
-    () =>
-      columns.map((column) => ({
-        ...column,
-        label: columnLabelOverrides[column.status] ?? column.label
-      })),
-    [columnLabelOverrides, columns]
-  );
-  const selectableEpics = useMemo(
-    () => epics.filter((epic) => epic.id !== editingTaskId),
-    [editingTaskId, epics]
-  );
+  const profileCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const loginCloseButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    void initializeProjects();
+    const normalizedPath = normalizeLegacyPath(window.location.pathname);
+    if (normalizedPath !== window.location.pathname) {
+      window.history.replaceState({}, '', normalizedPath);
+      setRoute(parseRoute(normalizedPath));
+    }
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      setTasks([]);
-      return;
+    function handlePopState() {
+      const currentPath = window.location.pathname;
+      const normalizedPath = normalizeLegacyPath(currentPath);
+
+      setIsLoginModalOpen(currentPath === '/login');
+
+      if (normalizedPath !== currentPath) {
+        window.history.replaceState({}, '', normalizedPath);
+      }
+
+      setRoute(parseRoute(normalizedPath));
     }
 
-    const projectExists = projects.some((project) => project.id === selectedProjectId);
-    if (!projectExists) {
-      return;
-    }
+    window.addEventListener('popstate', handlePopState);
 
-    void loadTasks(selectedProjectId);
-  }, [projects, selectedProjectId]);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      setCustomColumns([]);
-      setColumnLabelOverrides({});
-      return;
+    if (session) {
+      setProfileForm(createInitialProfileForm(session.user));
     }
-
-    setCustomColumns(loadCustomColumns(selectedProjectId));
-    setColumnLabelOverrides(loadColumnLabelOverrides(selectedProjectId));
-  }, [selectedProjectId]);
+  }, [session]);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      saveActiveProjectId(selectedProjectId);
+    const metaDescription = document.querySelector('meta[name="description"]');
+    const docEntry = route.type === 'public-docs' && route.slug ? findPublicDoc(route.slug) : null;
+
+    if (route.type === 'public-docs') {
+      document.title = docEntry ? `${docEntry.title} | MonoTask Docs` : 'Public Documentation | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          docEntry
+            ? docEntry.summary
+            : 'Public documentation for homepage and footer elements, including roadmap visibility.'
+        );
+      }
       return;
     }
 
-    clearActiveProjectId();
-  }, [selectedProjectId]);
+    if (route.type === 'alpha-access') {
+      document.title = 'Private Alpha | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          'Private alpha access information for MonoTask and onboarding contact details.'
+        );
+      }
+      return;
+    }
+
+    if (route.type === 'workspace') {
+      document.title = 'Workspace | MonoTask';
+      if (metaDescription) {
+        metaDescription.setAttribute(
+          'content',
+          'MonoTask workspace for planning, task execution, and focused developer workflows.'
+        );
+      }
+      return;
+    }
+
+    document.title = 'MonoTask | Solo Developer Task Manager';
+    if (metaDescription) {
+      metaDescription.setAttribute(
+        'content',
+        'Minimal task manager for solo developers focused on plans, specs, standards, and execution clarity.'
+      );
+    }
+  }, [route]);
 
   useEffect(() => {
-    if (!selectedProjectId) {
+    if (!session && route.type === 'workspace') {
+      navigate('/', true, setRoute);
       return;
     }
 
-    saveCustomColumns(selectedProjectId, customColumns);
-  }, [customColumns, selectedProjectId]);
+    if (session && (route.type === 'home' || route.type === 'alpha-access')) {
+      navigate(createWorkspacePath(session.user.username), true, setRoute);
+      return;
+    }
+
+    if (session && route.type === 'workspace' && route.username !== session.user.username) {
+      navigate(createWorkspacePath(session.user.username), true, setRoute);
+    }
+  }, [route, session]);
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      return;
+    if (session && isLoginModalOpen) {
+      setIsLoginModalOpen(false);
     }
-
-    saveColumnLabelOverrides(selectedProjectId, columnLabelOverrides);
-  }, [columnLabelOverrides, selectedProjectId]);
+  }, [session, isLoginModalOpen]);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -187,23 +168,13 @@ export function App() {
         return;
       }
 
-      if (deleteTarget) {
-        setDeleteTarget(null);
+      if (isProfilePanelOpen) {
+        setIsProfilePanelOpen(false);
         return;
       }
 
-      if (isCreatePanelOpen) {
-        handleCloseCreatePanel();
-        return;
-      }
-
-      if (isProjectPanelOpen) {
-        handleCloseProjectPanel();
-        return;
-      }
-
-      if (isSidebarOpen) {
-        setIsSidebarOpen(false);
+      if (isLoginModalOpen) {
+        setIsLoginModalOpen(false);
       }
     }
 
@@ -212,807 +183,470 @@ export function App() {
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [deleteTarget, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen]);
+  }, [isLoginModalOpen, isProfilePanelOpen]);
 
   useEffect(() => {
-    const hasOpenOverlay = Boolean(deleteTarget) || isAnyPanelOpen || isSidebarOpen;
-    document.body.classList.toggle('body-scroll-lock', hasOpenOverlay);
+    if (!isProfilePanelOpen && !isLoginModalOpen) {
+      document.body.classList.remove('body-scroll-lock');
+      return;
+    }
+
+    if (isProfilePanelOpen) {
+      profileCloseButtonRef.current?.focus();
+    } else if (isLoginModalOpen) {
+      loginCloseButtonRef.current?.focus();
+    }
+
+    document.body.classList.add('body-scroll-lock');
 
     return () => {
       document.body.classList.remove('body-scroll-lock');
     };
-  }, [deleteTarget, isAnyPanelOpen, isSidebarOpen]);
+  }, [isLoginModalOpen, isProfilePanelOpen]);
 
-  useEffect(() => {
-    if (selectedEpicId === 'all') {
-      return;
-    }
+  const workspaceUsername = session?.user.username ?? null;
 
-    const exists = epics.some((epic) => epic.id === selectedEpicId);
-    if (!exists) {
-      setSelectedEpicId('all');
-    }
-  }, [epics, selectedEpicId]);
-
-  async function initializeProjects() {
-    setIsLoadingProjects(true);
-    setErrorMessage(null);
-
-    try {
-      const nextProjects = await fetchProjects();
-      setProjects(nextProjects);
-
-      const nextSelectedProjectId = resolveSelectedProjectId(nextProjects, selectedProjectId);
-      setSelectedProjectId(nextSelectedProjectId);
-      setForm(createInitialForm(nextSelectedProjectId));
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-    } finally {
-      setIsLoadingProjects(false);
-    }
-  }
-
-  async function loadTasks(projectId: string) {
-    setIsLoadingTasks(true);
-    setErrorMessage(null);
-
-    try {
-      const boardTasks = await fetchTasks(projectId);
-      setTasks(boardTasks.map((task) => normalizeTaskDto(task)));
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-      setTasks([]);
-    } finally {
-      setIsLoadingTasks(false);
-    }
-  }
-
-  async function handleCreateProject(name: string) {
-    setIsCreatingProject(true);
-    setErrorMessage(null);
-
-    try {
-      const createdProject = await createProjectRecord({ name });
-      setProjects((current) => [...current, createdProject]);
-      handleSelectProject(createdProject.id);
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-      throw error;
-    } finally {
-      setIsCreatingProject(false);
-    }
-  }
-
-  function handleOpenProjectPanel(projectId: string) {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsSidebarOpen(false);
-    setIsCreatePanelOpen(false);
-    setEditingTaskId(null);
-    setEditingProjectId(project.id);
-    setProjectForm({
-      name: project.name,
-      description: project.description ?? ''
-    });
-    setIsProjectPanelOpen(true);
-  }
-
-  function handleUpdateProjectField(field: keyof ProjectFormState, value: string) {
-    setProjectForm((current) => ({
-      ...current,
-      [field]: value
-    }));
-  }
-
-  async function handleSubmitProjectUpdate(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!editingProjectId) {
-      return;
-    }
-
-    const project = projects.find((item) => item.id === editingProjectId);
-    if (!project) {
-      return;
-    }
-
-    const nextName = projectForm.name.trim();
-    const nextDescription = normalizeProjectDescription(projectForm.description);
-
-    if (nextName.length === 0) {
-      return;
-    }
-
-    if (project.name === nextName && project.description === nextDescription) {
-      handleCloseProjectPanel();
-      return;
-    }
-
-    setIsSubmittingProject(true);
-    setErrorMessage(null);
+    setIsSubmittingAuth(true);
+    setAuthError(null);
 
     try {
-      const updated = await updateProjectRecord(editingProjectId, {
-        name: nextName,
-        description: nextDescription
+      const response = await loginUser({
+        username: loginForm.username,
+        password: loginForm.password
       });
 
-      setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      handleCloseProjectPanel();
+      persistSession(response, setSession);
+      setIsLoginModalOpen(false);
+      navigate(createWorkspacePath(response.data.username), true, setRoute);
     } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
+      setAuthError(mapApiError(error));
     } finally {
-      setIsSubmittingProject(false);
+      setIsSubmittingAuth(false);
     }
   }
 
-  function handleRequestDeleteProject(projectId: string) {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-
-    setDeleteTarget({
-      type: 'project',
-      id: project.id,
-      name: project.name
-    });
-  }
-
-  function handleRequestDeleteTask(task: TaskDto) {
-    setDeleteTarget({
-      type: 'task',
-      id: task.id,
-      title: task.title
-    });
-  }
-
-  async function handleConfirmDeleteTarget() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    setIsConfirmingDelete(true);
-    const target = deleteTarget;
-
-    try {
-      const deleted =
-        target.type === 'project' ? await performDeleteProject(target.id) : await performDeleteTask(target.id);
-
-      if (deleted) {
-        setDeleteTarget(null);
-      }
-    } finally {
-      setIsConfirmingDelete(false);
-    }
-  }
-
-  async function performDeleteProject(projectId: string): Promise<boolean> {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) {
-      return false;
-    }
-
-    setIsDeletingProjectId(projectId);
-    setErrorMessage(null);
-
-    try {
-      await deleteProjectRecord(projectId);
-
-      const nextProjects = projects.filter((item) => item.id !== projectId);
-      setProjects(nextProjects);
-      clearProjectViewState(projectId);
-
-      if (selectedProjectId !== projectId) {
-        if (editingProjectId === projectId) {
-          setIsProjectPanelOpen(false);
-          resetProjectFormState();
-        }
-
-        return true;
-      }
-
-      const fallbackProjectId = nextProjects[0]?.id ?? null;
-      setSelectedProjectId(fallbackProjectId);
-      setTasks([]);
-      setSearchText('');
-      setSelectedEpicId('all');
-      setEditingTaskId(null);
-      setIsCreatePanelOpen(false);
-      setIsProjectPanelOpen(false);
-      resetProjectFormState();
-      setForm(createInitialForm(fallbackProjectId));
-      return true;
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-      return false;
-    } finally {
-      setIsDeletingProjectId(null);
-    }
-  }
-
-  async function handleSubmitTask(event: FormEvent<HTMLFormElement>) {
+  async function handleUpdateProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedProjectId) {
+    if (!session) {
       return;
     }
 
-    setIsSubmittingTask(true);
-    setErrorMessage(null);
-
-    if (editingTaskId) {
-      await handleUpdateTask(editingTaskId);
-      return;
-    }
-
-    await handleCreateTask();
-  }
-
-  async function handleMoveTaskToStatus(taskId: string, status: TaskStatus) {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task || task.status === status) {
-      return;
-    }
+    setIsSavingProfile(true);
+    setProfileError(null);
 
     try {
-      const updatedTask = await moveTaskStatus(taskId, status);
-      setTasks((current) => current.map((item) => (item.id === taskId ? normalizeTaskDto(updatedTask) : item)));
+      const updatedUser = await updateMyProfile({
+        email: profileForm.email,
+        displayName: profileForm.displayName
+      });
+
+      const nextSession: AuthSession = {
+        ...session,
+        user: updatedUser
+      };
+
+      writeSession(nextSession);
+      setSession(nextSession);
+      setIsProfilePanelOpen(false);
     } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-    }
-  }
+      if (isUnauthorizedError(error)) {
+        handleSessionInvalid();
+        return;
+      }
 
-  async function handleCreateTask() {
-    if (!selectedProjectId) {
-      setIsSubmittingTask(false);
-      return;
-    }
-
-    const submittedForm = {
-      ...form,
-      boardId: selectedProjectId
-    };
-
-    try {
-      const newTask = await createTask(submittedForm);
-      setTasks((current) => [normalizeTaskDto(newTask, submittedForm), ...current]);
-      resetFormState(selectedProjectId);
-      setIsCreatePanelOpen(false);
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
+      setProfileError(mapApiError(error));
     } finally {
-      setIsSubmittingTask(false);
+      setIsSavingProfile(false);
     }
   }
 
-  async function handleUpdateTask(taskId: string) {
-    const taskType = form.taskType ?? 'task';
-    const payload: UpdateTaskRequest = {
-      title: form.title,
-      description: form.description ?? null,
-      category: form.category,
-      priority: form.priority ?? 'medium',
-      taskType,
-      epicId: taskType === 'task' ? form.epicId ?? null : null
-    };
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session) {
+      return;
+    }
+
+    if (profileForm.newPassword !== profileForm.confirmNewPassword) {
+      setProfileError('New password confirmation does not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    setProfileError(null);
 
     try {
-      const updatedTask = await updateTask(taskId, payload);
-      setTasks((current) => current.map((item) => (item.id === taskId ? normalizeTaskDto(updatedTask, form) : item)));
-      resetFormState(selectedProjectId);
-      setIsCreatePanelOpen(false);
+      await changeMyPassword({
+        currentPassword: profileForm.currentPassword,
+        newPassword: profileForm.newPassword
+      });
+
+      setProfileForm((current) => ({
+        ...current,
+        currentPassword: '',
+        newPassword: '',
+        confirmNewPassword: ''
+      }));
+      setIsProfilePanelOpen(false);
     } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
+      if (isUnauthorizedError(error)) {
+        handleSessionInvalid();
+        return;
+      }
+
+      setProfileError(mapApiError(error));
     } finally {
-      setIsSubmittingTask(false);
+      setIsChangingPassword(false);
     }
   }
 
-  async function performDeleteTask(taskId: string): Promise<boolean> {
-    setErrorMessage(null);
-
-    try {
-      await deleteTask(taskId);
-      setTasks((current) => current.filter((item) => item.id !== taskId));
-
-      if (editingTaskId === taskId) {
-        resetFormState(selectedProjectId);
-        setIsCreatePanelOpen(false);
-      }
-      return true;
-    } catch (error) {
-      setErrorMessage(mapErrorMessage(error));
-      return false;
-    }
+  function handleSessionInvalid() {
+    clearSession();
+    setSession(null);
+    setIsProfilePanelOpen(false);
+    setIsLoginModalOpen(false);
+    navigate('/', true, setRoute);
   }
 
-  function handleEditTask(task: TaskDto) {
-    if (isCreatePanelOpen && editingTaskId === task.id) {
-      handleCloseCreatePanel();
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsSidebarOpen(false);
-    setIsProjectPanelOpen(false);
-    resetProjectFormState();
-    setEditingTaskId(task.id);
-    setForm({
-      boardId: task.boardId,
-      title: task.title,
-      description: task.description ?? '',
-      category: task.category,
-      priority: task.priority,
-      taskType: task.taskType ?? 'task',
-      epicId: task.epicId ?? null
-    });
-    setIsCreatePanelOpen(true);
+  function handleLogout() {
+    clearSession();
+    setSession(null);
+    setIsProfilePanelOpen(false);
+    setIsLoginModalOpen(false);
+    navigate('/', true, setRoute);
   }
 
-  function handleSelectProject(projectId: string) {
-    if (projectId === selectedProjectId) {
-      setIsSidebarOpen(false);
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsSidebarOpen(false);
-    setIsCreatePanelOpen(false);
-    setIsProjectPanelOpen(false);
-    resetProjectFormState();
-    setSearchText('');
-    setSelectedEpicId('all');
-    setEditingTaskId(null);
-    setTasks([]);
-    setSelectedProjectId(projectId);
-    setForm(createInitialForm(projectId));
+  function openLoginModal() {
+    setAuthError(null);
+    setIsLoginModalOpen(true);
   }
 
-  function handleUpdateFormField<Key extends keyof CreateTaskRequest>(key: Key, value: CreateTaskRequest[Key]) {
-    setForm((current) => {
-      const next = { ...current, [key]: value };
-
-      if (key === 'taskType' && value === 'epic') {
-        next.epicId = null;
-      }
-
-      return next;
-    });
+  function closeLoginModal() {
+    setIsLoginModalOpen(false);
   }
 
-  function handleToggleSidebar() {
-    setIsCreatePanelOpen(false);
-    setIsProjectPanelOpen(false);
-    setEditingTaskId(null);
-    resetProjectFormState();
-    setIsSidebarOpen((current) => !current);
-  }
+  if (route.type === 'home' || route.type === 'alpha-access' || route.type === 'public-docs') {
+    const handleLoginCtaClick = session
+      ? () => navigate(createWorkspacePath(session.user.username), false, setRoute)
+      : openLoginModal;
 
-  function handleOpenCreatePanel() {
-    if (!selectedProjectId) {
-      return;
-    }
+    return (
+      <>
+        {route.type === 'alpha-access' ? (
+          <AlphaAccessPage onBackHomeClick={() => navigate('/', false, setRoute)} onLoginClick={handleLoginCtaClick} />
+        ) : null}
 
-    setIsSidebarOpen(false);
-    setIsProjectPanelOpen(false);
-    resetProjectFormState();
-    resetFormState(selectedProjectId);
-    setIsCreatePanelOpen(true);
-  }
+        {route.type === 'home' ? (
+          <Homepage
+            onLoginClick={handleLoginCtaClick}
+            onDocsClick={() => navigate('/docs', false, setRoute)}
+            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
+            onAlphaAccessClick={() => navigate('/alpha-access', false, setRoute)}
+          />
+        ) : null}
 
-  function handleCloseCreatePanel() {
-    resetFormState(selectedProjectId);
-    setIsCreatePanelOpen(false);
-  }
+        {route.type === 'public-docs' ? (
+          <PublicDocsPage
+            entry={route.slug ? findPublicDoc(route.slug) : null}
+            onHomeClick={() => navigate('/', false, setRoute)}
+            onLoginClick={handleLoginCtaClick}
+            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
+          />
+        ) : null}
 
-  function handleCloseProjectPanel() {
-    setIsProjectPanelOpen(false);
-    resetProjectFormState();
-  }
+        {!session && isLoginModalOpen ? (
+          <button
+            type="button"
+            className="login-backdrop"
+            onClick={closeLoginModal}
+            aria-label="Close login dialog"
+          />
+        ) : null}
 
-  function handleCloseActivePanel() {
-    if (isProjectPanelOpen) {
-      handleCloseProjectPanel();
-      return;
-    }
+        {!session && isLoginModalOpen ? (
+          <section className="login-modal" role="dialog" aria-label="Login" aria-modal="true">
+            <div className="auth-card login-modal-card">
+              <header className="login-modal-head">
+                <h1>Login</h1>
+                <button
+                  type="button"
+                  ref={loginCloseButtonRef}
+                  className="icon-btn"
+                  onClick={closeLoginModal}
+                  aria-label="Close login modal"
+                >
+                  X
+                </button>
+              </header>
 
-    handleCloseCreatePanel();
-  }
+              {authError ? <p className="error-banner">{authError}</p> : null}
 
-  function handleAddCustomColumn(label: string) {
-    const normalizedLabel = normalizeColumnLabel(label);
+              <form className="auth-form" onSubmit={handleLogin}>
+                <label htmlFor="login-modal-username">Username</label>
+                <input
+                  id="login-modal-username"
+                  value={loginForm.username}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, username: event.target.value }))}
+                  required
+                />
 
-    if (!normalizedLabel || !selectedProjectId) {
-      return;
-    }
+                <label htmlFor="login-modal-password">Password</label>
+                <input
+                  id="login-modal-password"
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                  required
+                />
 
-    setCustomColumns((current) => {
-      if (current.length >= MAX_CUSTOM_COLUMNS) {
-        return current;
-      }
-
-      const alreadyExists = current.some((item) => item.label.toLowerCase() === normalizedLabel.toLowerCase());
-      if (alreadyExists) {
-        return current;
-      }
-
-      return [...current, { id: createCustomColumnId(), label: normalizedLabel }];
-    });
-  }
-
-  function handleRemoveCustomColumn(columnId: string) {
-    setCustomColumns((current) => current.filter((item) => item.id !== columnId));
-  }
-
-  function handleRenameColumn(status: TaskStatus, label: string) {
-    const normalizedLabel = normalizeColumnLabel(label);
-    if (!normalizedLabel) {
-      return;
-    }
-
-    setColumnLabelOverrides((current) => ({
-      ...current,
-      [status]: normalizedLabel
-    }));
-  }
-
-  function handleRenameCustomColumn(columnId: string, label: string) {
-    const normalizedLabel = normalizeColumnLabel(label);
-    if (!normalizedLabel) {
-      return;
-    }
-
-    setCustomColumns((current) =>
-      current.map((column) => (column.id === columnId ? { ...column, label: normalizedLabel } : column))
+                <div className="auth-actions">
+                  <button type="submit" className="primary-btn" disabled={isSubmittingAuth}>
+                    {isSubmittingAuth ? 'Logging in...' : 'Login'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    onClick={() => {
+                      setIsLoginModalOpen(false);
+                      navigate('/docs', false, setRoute);
+                    }}
+                  >
+                    Open Public Docs
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+      </>
     );
   }
 
-  function resetFormState(projectId: string | null) {
-    setEditingTaskId(null);
-    setForm(createInitialForm(projectId));
-  }
-
-  function resetProjectFormState() {
-    setEditingProjectId(null);
-    setProjectForm({
-      name: '',
-      description: ''
-    });
+  if (route.type !== 'workspace' || !workspaceUsername || !session) {
+    return null;
   }
 
   return (
-    <AppShell
-      isSidebarOpen={isSidebarOpen}
-      isCreatePanelOpen={isAnyPanelOpen}
-      panelCloseLabel={panelCloseLabel}
-      onCloseSidebar={() => setIsSidebarOpen(false)}
-      onCloseCreatePanel={handleCloseActivePanel}
-      sidebar={
-        <AppSidebar
-          isOpen={isSidebarOpen}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          isCreatingProject={isCreatingProject}
-          isDeletingProjectId={isDeletingProjectId}
-          onClose={() => setIsSidebarOpen(false)}
-          onSelectProject={handleSelectProject}
-          onCreateProject={handleCreateProject}
-          onOpenProjectPanel={handleOpenProjectPanel}
-        />
-      }
-      header={
-        <BoardHeader
-          isSidebarOpen={isSidebarOpen}
-          projectName={activeProjectName}
-          searchText={searchText}
-          canCreateTask={Boolean(selectedProjectId)}
-          onToggleSidebar={handleToggleSidebar}
-          onSearchTextChange={setSearchText}
-          onOpenCreatePanel={handleOpenCreatePanel}
-        />
-      }
-      board={
-        <>
-          {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
-          {selectedProjectId ? (
-            <>
-              <EpicTabs selectedEpicId={selectedEpicId} epics={epics} onSelectEpic={setSelectedEpicId} />
-              <TaskBoard
-                columns={displayColumns}
-                customColumns={customColumns}
-                isLoading={isLoadingProjects || isLoadingTasks}
-                onMoveTaskToStatus={handleMoveTaskToStatus}
-                onEditTask={handleEditTask}
-                onRenameColumn={handleRenameColumn}
-                onRenameCustomColumn={handleRenameCustomColumn}
-                onOpenCreateTask={handleOpenCreatePanel}
-                onAddCustomColumn={handleAddCustomColumn}
-                onRemoveCustomColumn={handleRemoveCustomColumn}
-              />
-            </>
-          ) : (
-            <section className="board-section" aria-label="Project board state">
-              {isLoadingProjects ? (
-                <p className="status-line">Loading projects...</p>
-              ) : (
-                <p className="status-line">Create a project from the sidebar to start using the board.</p>
-              )}
-            </section>
-          )}
-        </>
-      }
-      createPanel={
-        <>
-          <CreateTaskPanel
-            isOpen={isCreatePanelOpen}
-            isSubmitting={isSubmittingTask}
-            mode={editingTaskId ? 'edit' : 'create'}
-            form={form}
-            epics={selectableEpics}
-            onClose={handleCloseCreatePanel}
-            onSubmit={handleSubmitTask}
-            onUpdateField={handleUpdateFormField}
-            {...(editingTaskId
-              ? {
-                  onDeleteTask: () => {
-                    const task = tasks.find((item) => item.id === editingTaskId);
-                  if (!task) {
-                    return;
-                  }
+    <>
+      <WorkspaceApp
+        username={workspaceUsername}
+        onOpenProfilePanel={() => {
+          setProfileError(null);
+          setIsProfilePanelOpen(true);
+        }}
+        onSessionInvalid={handleSessionInvalid}
+      />
 
-                  handleRequestDeleteTask(task);
-                }
-              }
-            : {})}
-          />
-          <EditProjectPanel
-            isOpen={isProjectPanelOpen}
-            isSubmitting={isSubmittingProject}
-            isDeleting={Boolean(editingProjectId && isDeletingProjectId === editingProjectId)}
-            form={projectForm}
-            onClose={handleCloseProjectPanel}
-            onSubmit={handleSubmitProjectUpdate}
-            onUpdateField={handleUpdateProjectField}
-            onDeleteProject={() => {
-              if (!editingProject) {
-                return;
-              }
+      {isProfilePanelOpen ? (
+        <button
+          type="button"
+          className="app-backdrop app-backdrop--visible"
+          onClick={() => setIsProfilePanelOpen(false)}
+          aria-label="Close profile panel"
+        />
+      ) : null}
 
-              handleRequestDeleteProject(editingProject.id);
-            }}
-          />
-          <ConfirmActionDialog
-            isOpen={Boolean(deleteTarget)}
-            title={confirmDialogTitle}
-            message={confirmDialogMessage}
-            confirmLabel={confirmDialogActionLabel}
-            isSubmitting={isConfirmingDelete}
-            onCancel={() => setDeleteTarget(null)}
-            onConfirm={() => {
-              void handleConfirmDeleteTarget();
-            }}
-          />
-        </>
-      }
-    />
+      <aside
+        role="dialog"
+        aria-label="Edit profile"
+        className={`create-panel profile-panel ${isProfilePanelOpen ? 'create-panel--open' : ''}`}
+      >
+        <div className="create-form profile-panel-content">
+          <header className="create-form-head">
+            <h2>Edit profile</h2>
+            <button
+              type="button"
+              ref={profileCloseButtonRef}
+              className="icon-btn"
+              onClick={() => setIsProfilePanelOpen(false)}
+              aria-label="Close profile panel"
+            >
+              X
+            </button>
+          </header>
+
+          {profileError ? <p className="error-banner">{profileError}</p> : null}
+
+          <section className="profile-summary" aria-label="Authenticated user">
+            <p className="profile-summary-name">{session.user.displayName}</p>
+            <p className="profile-summary-username">@{session.user.username}</p>
+          </section>
+
+          <form className="create-form profile-form" onSubmit={handleUpdateProfile}>
+            <h3>Public profile</h3>
+
+            <label htmlFor="profile-email">Email</label>
+            <input
+              id="profile-email"
+              type="email"
+              value={profileForm.email}
+              onChange={(event) => setProfileForm((current) => ({ ...current, email: event.target.value }))}
+              required
+            />
+
+            <label htmlFor="profile-display-name">Display name</label>
+            <input
+              id="profile-display-name"
+              value={profileForm.displayName}
+              onChange={(event) => setProfileForm((current) => ({ ...current, displayName: event.target.value }))}
+              required
+            />
+
+            <div className="form-actions">
+              <button type="submit" className="primary-btn" disabled={isSavingProfile}>
+                {isSavingProfile ? 'Saving...' : 'Save profile'}
+              </button>
+            </div>
+          </form>
+
+          <form className="create-form profile-form" onSubmit={handleChangePassword}>
+            <h3>Security</h3>
+
+            <label htmlFor="profile-current-password">Current password</label>
+            <input
+              id="profile-current-password"
+              type="password"
+              value={profileForm.currentPassword}
+              onChange={(event) => setProfileForm((current) => ({ ...current, currentPassword: event.target.value }))}
+              required
+            />
+
+            <label htmlFor="profile-new-password">New password</label>
+            <input
+              id="profile-new-password"
+              type="password"
+              value={profileForm.newPassword}
+              onChange={(event) => setProfileForm((current) => ({ ...current, newPassword: event.target.value }))}
+              required
+            />
+
+            <label htmlFor="profile-new-password-confirm">Confirm new password</label>
+            <input
+              id="profile-new-password-confirm"
+              type="password"
+              value={profileForm.confirmNewPassword}
+              onChange={(event) => setProfileForm((current) => ({ ...current, confirmNewPassword: event.target.value }))}
+              required
+            />
+
+            <div className="form-actions">
+              <button type="button" className="ghost-btn" onClick={handleLogout}>
+                Logout
+              </button>
+              <button type="submit" className="primary-btn" disabled={isChangingPassword}>
+                {isChangingPassword ? 'Saving...' : 'Change password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }
 
-function mapErrorMessage(error: unknown): string {
-  if (isTaskApiError(error) || isProjectApiError(error)) {
+function normalizeLegacyPath(pathname: string): string {
+  if (pathname === '/login') {
+    return '/';
+  }
+
+  if (pathname === '/register') {
+    return '/alpha-access';
+  }
+
+  if (pathname === '/docs/docs') {
+    return '/docs';
+  }
+
+  return pathname;
+}
+
+function parseRoute(pathname: string): AppRoute {
+  if (pathname === '/alpha-access') {
+    return { type: 'alpha-access' };
+  }
+
+  if (pathname === '/docs') {
+    return { type: 'public-docs', slug: null };
+  }
+
+  if (pathname === '/') {
+    return { type: 'home' };
+  }
+
+  const docsMatch = /^\/docs\/([^/]+)$/.exec(pathname);
+  if (docsMatch?.[1]) {
+    return {
+      type: 'public-docs',
+      slug: decodeURIComponent(docsMatch[1])
+    };
+  }
+
+  const workspaceMatch = /^\/u\/([^/]+)$/.exec(pathname);
+  if (workspaceMatch?.[1]) {
+    return {
+      type: 'workspace',
+      username: decodeURIComponent(workspaceMatch[1])
+    };
+  }
+
+  return { type: 'home' };
+}
+
+function createWorkspacePath(username: string): string {
+  return `/u/${encodeURIComponent(username)}`;
+}
+
+function createDocPath(slug: string): string {
+  if (slug === 'docs') {
+    return '/docs';
+  }
+
+  return `/docs/${encodeURIComponent(slug)}`;
+}
+
+function navigate(pathname: string, replace: boolean, setRoute: (route: AppRoute) => void): void {
+  if (replace) {
+    window.history.replaceState({}, '', pathname);
+  } else {
+    window.history.pushState({}, '', pathname);
+  }
+
+  setRoute(parseRoute(pathname));
+}
+
+function persistSession(response: AuthSessionResponse, setSession: (session: AuthSession) => void): void {
+  const nextSession: AuthSession = {
+    accessToken: response.meta.accessToken,
+    tokenType: response.meta.tokenType,
+    expiresIn: response.meta.expiresIn,
+    user: response.data
+  };
+
+  writeSession(nextSession);
+  setSession(nextSession);
+}
+
+function createInitialProfileForm(user: UserDto | null): ProfileFormState {
+  return {
+    email: user?.email ?? '',
+    displayName: user?.displayName ?? '',
+    currentPassword: '',
+    newPassword: '',
+    confirmNewPassword: ''
+  };
+}
+
+function mapApiError(error: unknown): string {
+  if (isAuthApiError(error)) {
     return `${error.message} (${error.code})`;
   }
 
   return 'Unexpected error. Please try again.';
 }
 
-function normalizeTaskDto(task: TaskDto, fallback?: Pick<CreateTaskRequest, 'taskType' | 'epicId'>): TaskDto {
-  return {
-    ...task,
-    taskType: task.taskType ?? fallback?.taskType ?? 'task',
-    epicId: task.epicId ?? fallback?.epicId ?? null
-  };
-}
-
-function normalizeColumnLabel(value: string): string {
-  return value.trim().replace(/\s+/g, ' ').slice(0, 40);
-}
-
-function normalizeProjectDescription(value: string): string | null {
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    return null;
-  }
-
-  return normalized.slice(0, 4000);
-}
-
-function createCustomColumnId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-
-  return `column-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-}
-
-function createInitialForm(projectId: string | null): CreateTaskRequest {
-  return {
-    boardId: projectId ?? '',
-    title: '',
-    description: '',
-    category: 'General',
-    priority: 'medium',
-    taskType: 'task',
-    epicId: null
-  };
-}
-
-function resolveSelectedProjectId(projects: ProjectDto[], preferredProjectId: string | null): string | null {
-  if (projects.length === 0) {
-    return null;
-  }
-
-  if (preferredProjectId && projects.some((project) => project.id === preferredProjectId)) {
-    return preferredProjectId;
-  }
-
-  return projects[0]?.id ?? null;
-}
-
-function createCustomColumnsStorageKey(projectId: string): string {
-  return `${CUSTOM_COLUMNS_STORAGE_KEY_PREFIX}${projectId}`;
-}
-
-function createColumnLabelsStorageKey(projectId: string): string {
-  return `${COLUMN_LABELS_STORAGE_KEY_PREFIX}${projectId}`;
-}
-
-function clearProjectViewState(projectId: string) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.removeItem(createCustomColumnsStorageKey(projectId));
-    window.localStorage.removeItem(createColumnLabelsStorageKey(projectId));
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
-}
-
-function loadCustomColumns(projectId: string): CustomColumn[] {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(createCustomColumnsStorageKey(projectId));
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .filter((item): item is CustomColumn => {
-        if (typeof item !== 'object' || item === null) {
-          return false;
-        }
-
-        const candidate = item as { id?: unknown; label?: unknown };
-        return typeof candidate.id === 'string' && typeof candidate.label === 'string';
-      })
-      .map((item) => ({ id: item.id, label: normalizeColumnLabel(item.label) }))
-      .filter((item) => item.label.length > 0)
-      .slice(0, MAX_CUSTOM_COLUMNS);
-  } catch {
-    return [];
-  }
-}
-
-function saveCustomColumns(projectId: string, columns: CustomColumn[]) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(createCustomColumnsStorageKey(projectId), JSON.stringify(columns));
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
-}
-
-function loadColumnLabelOverrides(projectId: string): ColumnLabelOverrides {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const raw = window.localStorage.getItem(createColumnLabelsStorageKey(projectId));
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return {};
-    }
-
-    const record = parsed as Record<string, unknown>;
-
-    return taskStatuses.reduce<ColumnLabelOverrides>((acc, status) => {
-      const value = record[status];
-      if (typeof value !== 'string') {
-        return acc;
-      }
-
-      const normalized = normalizeColumnLabel(value);
-      if (!normalized) {
-        return acc;
-      }
-
-      acc[status] = normalized;
-      return acc;
-    }, {});
-  } catch {
-    return {};
-  }
-}
-
-function saveColumnLabelOverrides(projectId: string, overrides: ColumnLabelOverrides) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(createColumnLabelsStorageKey(projectId), JSON.stringify(overrides));
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
-}
-
-function loadActiveProjectId(): string | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const raw = window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY);
-
-  if (!raw || raw.trim().length === 0) {
-    return null;
-  }
-
-  return raw;
-}
-
-function saveActiveProjectId(projectId: string) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, projectId);
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
-}
-
-function clearActiveProjectId() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
+function isUnauthorizedError(error: unknown): boolean {
+  return isAuthApiError(error) && error.statusCode === 401;
 }

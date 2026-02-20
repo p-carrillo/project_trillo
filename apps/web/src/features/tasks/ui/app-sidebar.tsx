@@ -7,6 +7,7 @@ interface ProjectItem {
 
 interface AppSidebarProps {
   isOpen: boolean;
+  username: string;
   projects: ProjectItem[];
   selectedProjectId: string | null;
   isCreatingProject: boolean;
@@ -15,10 +16,12 @@ interface AppSidebarProps {
   onSelectProject: (projectId: string) => void;
   onCreateProject: (name: string) => Promise<void>;
   onOpenProjectPanel: (projectId: string) => void;
+  onOpenProfilePanel: () => void;
 }
 
 export function AppSidebar({
   isOpen,
+  username,
   projects,
   selectedProjectId,
   isCreatingProject,
@@ -26,7 +29,8 @@ export function AppSidebar({
   onClose,
   onSelectProject,
   onCreateProject,
-  onOpenProjectPanel
+  onOpenProjectPanel,
+  onOpenProfilePanel
 }: AppSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
@@ -82,78 +86,98 @@ export function AppSidebar({
         </button>
       </div>
 
-      <nav className="menu-list" aria-label="Projects">
-        <div className="project-switcher">
-          <p>Projects</p>
+      <div className="side-panel-main">
+        <nav className="menu-list" aria-label="Projects">
+          <div className="project-switcher">
+            <p>Projects</p>
+            <button
+              type="button"
+              className="project-add-btn"
+              aria-label="Add project"
+              onClick={() => setIsProjectFormOpen((current) => !current)}
+            >
+              +
+            </button>
+          </div>
+
+          {isProjectFormOpen ? (
+            <form className="project-create-form" onSubmit={handleSubmitProject}>
+              <label htmlFor="project-name" className="sr-only">
+                Project name
+              </label>
+              <input
+                id="project-name"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                minLength={2}
+                maxLength={120}
+                placeholder="Project name"
+                required
+              />
+              <div className="project-create-actions">
+                <button type="button" className="ghost-btn" onClick={() => setIsProjectFormOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="primary-btn" disabled={isCreatingProject || projectName.trim().length === 0}>
+                  {isCreatingProject ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {projects.length === 0 ? (
+            <p className="projects-empty">No projects yet.</p>
+          ) : (
+            projects.map((project) => (
+              <div key={project.id} className={`project-item ${selectedProjectId === project.id ? 'project-item--active' : ''}`}>
+                <button
+                  type="button"
+                  className={`menu-item ${selectedProjectId === project.id ? 'menu-item--active' : ''}`}
+                  onClick={() => onSelectProject(project.id)}
+                  aria-label={`Select project ${project.name}`}
+                >
+                  {project.name}
+                </button>
+                <button
+                  type="button"
+                  className="project-options-btn"
+                  onClick={() => onOpenProjectPanel(project.id)}
+                  disabled={isDeletingProjectId === project.id}
+                  aria-label={`Open project options ${project.name}`}
+                >
+                  {isDeletingProjectId === project.id ? (
+                    '...'
+                  ) : (
+                    <span className="project-options-icon" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  )}
+                </button>
+              </div>
+            ))
+          )}
+        </nav>
+
+        <div className="sidebar-user-row">
+          <p className="sidebar-user-name" title={username}>
+            {username}
+          </p>
           <button
             type="button"
-            className="project-add-btn"
-            aria-label="Add project"
-            onClick={() => setIsProjectFormOpen((current) => !current)}
+            className="sidebar-user-menu-btn"
+            onClick={onOpenProfilePanel}
+            aria-label={`Open profile panel for ${username}`}
           >
-            +
+            <span className="sidebar-user-menu-icon" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
         </div>
-
-        {isProjectFormOpen ? (
-          <form className="project-create-form" onSubmit={handleSubmitProject}>
-            <label htmlFor="project-name" className="sr-only">
-              Project name
-            </label>
-            <input
-              id="project-name"
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              minLength={2}
-              maxLength={120}
-              placeholder="Project name"
-              required
-            />
-            <div className="project-create-actions">
-              <button type="button" className="ghost-btn" onClick={() => setIsProjectFormOpen(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="primary-btn" disabled={isCreatingProject || projectName.trim().length === 0}>
-                {isCreatingProject ? 'Creating...' : 'Create'}
-              </button>
-            </div>
-          </form>
-        ) : null}
-
-        {projects.length === 0 ? (
-          <p className="projects-empty">No projects yet.</p>
-        ) : (
-          projects.map((project) => (
-            <div key={project.id} className={`project-item ${selectedProjectId === project.id ? 'project-item--active' : ''}`}>
-              <button
-                type="button"
-                className={`menu-item ${selectedProjectId === project.id ? 'menu-item--active' : ''}`}
-                onClick={() => onSelectProject(project.id)}
-                aria-label={`Select project ${project.name}`}
-              >
-                {project.name}
-              </button>
-              <button
-                type="button"
-                className="project-options-btn"
-                onClick={() => onOpenProjectPanel(project.id)}
-                disabled={isDeletingProjectId === project.id}
-                aria-label={`Open project options ${project.name}`}
-              >
-                {isDeletingProjectId === project.id ? (
-                  '...'
-                ) : (
-                  <span className="project-options-icon" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                  </span>
-                )}
-              </button>
-            </div>
-          ))
-        )}
-      </nav>
+      </div>
     </aside>
   );
 }

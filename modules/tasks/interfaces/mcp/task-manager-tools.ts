@@ -16,6 +16,7 @@ import {
 } from '../../domain';
 
 interface TaskManagerToolDependencies {
+  actorUserId: string;
   projectService: ProjectService;
   taskService: TaskService;
 }
@@ -224,7 +225,7 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
 
   const handlers: Record<ToolName, ToolHandler> = {
       list_projects: async () => {
-        const projects = await dependencies.projectService.listProjects();
+        const projects = await dependencies.projectService.listProjects(dependencies.actorUserId);
         return buildSuccessResult({
           data: projects.map(toProjectDto),
           meta: {
@@ -234,21 +235,21 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
       },
       create_project: async (args) => {
         const payload = parseCreateProjectArgs(args);
-        const project = await dependencies.projectService.createProject(payload);
+        const project = await dependencies.projectService.createProject(dependencies.actorUserId, payload);
         return buildSuccessResult({
           data: toProjectDto(project)
         });
       },
       update_project: async (args) => {
         const { projectId, payload } = parseUpdateProjectArgs(args);
-        const project = await dependencies.projectService.updateProject(projectId, payload);
+        const project = await dependencies.projectService.updateProject(dependencies.actorUserId, projectId, payload);
         return buildSuccessResult({
           data: toProjectDto(project)
         });
       },
       delete_project: async (args) => {
         const projectId = parseRequiredString(args.projectId, 'projectId');
-        await dependencies.projectService.deleteProject(projectId);
+        await dependencies.projectService.deleteProject(dependencies.actorUserId, projectId);
         return buildSuccessResult({
           data: {
             projectId,
@@ -258,7 +259,7 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
       },
       list_tasks: async (args) => {
         const boardId = parseRequiredString(args.boardId, 'boardId');
-        const tasks = await dependencies.taskService.listBoardTasks(boardId);
+        const tasks = await dependencies.taskService.listBoardTasks(dependencies.actorUserId, boardId);
         return buildSuccessResult({
           data: tasks.map(toTaskDto),
           meta: {
@@ -269,14 +270,14 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
       },
       create_task: async (args) => {
         const payload = parseCreateTaskArgs(args);
-        const task = await dependencies.taskService.createTask(payload);
+        const task = await dependencies.taskService.createTask(dependencies.actorUserId, payload);
         return buildSuccessResult({
           data: toTaskDto(task)
         });
       },
       update_task: async (args) => {
         const { taskId, payload } = parseUpdateTaskArgs(args);
-        const task = await dependencies.taskService.updateTask(taskId, payload);
+        const task = await dependencies.taskService.updateTask(dependencies.actorUserId, taskId, payload);
         return buildSuccessResult({
           data: toTaskDto(task)
         });
@@ -291,14 +292,14 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
           });
         }
 
-        const task = await dependencies.taskService.moveTaskStatus(taskId, status);
+        const task = await dependencies.taskService.moveTaskStatus(dependencies.actorUserId, taskId, status);
         return buildSuccessResult({
           data: toTaskDto(task)
         });
       },
       delete_task: async (args) => {
         const taskId = parseRequiredString(args.taskId, 'taskId');
-        await dependencies.taskService.deleteTask(taskId);
+        await dependencies.taskService.deleteTask(dependencies.actorUserId, taskId);
         return buildSuccessResult({
           data: {
             taskId,

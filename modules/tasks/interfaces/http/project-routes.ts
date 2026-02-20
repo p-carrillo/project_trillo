@@ -28,11 +28,17 @@ class ValidationError extends Error {
 
 export async function registerProjectRoutes(
   fastify: FastifyInstance,
-  projectService: ProjectService
+  projectService: ProjectService,
+  resolveAuthenticatedUser: (request: FastifyRequest) => Promise<string | null>
 ): Promise<void> {
   fastify.get('/api/v1/projects', async (_request, reply) => {
     return handleRequest(reply, async () => {
-      const projects = await projectService.listProjects();
+      const userId = await resolveAuthenticatedUser(_request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
+      const projects = await projectService.listProjects(userId);
 
       return {
         statusCode: 200,
@@ -48,8 +54,13 @@ export async function registerProjectRoutes(
 
   fastify.post('/api/v1/projects', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const body = parseCreateProjectBody(request.body);
-      const project = await projectService.createProject(body);
+      const project = await projectService.createProject(userId, body);
 
       return {
         statusCode: 201,
@@ -62,9 +73,14 @@ export async function registerProjectRoutes(
 
   fastify.patch('/api/v1/projects/:projectId', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const projectId = parseProjectId(request.params);
       const body = parseUpdateProjectBody(request.body);
-      const project = await projectService.updateProject(projectId, body);
+      const project = await projectService.updateProject(userId, projectId, body);
 
       return {
         statusCode: 200,
@@ -77,14 +93,31 @@ export async function registerProjectRoutes(
 
   fastify.delete('/api/v1/projects/:projectId', async (request, reply) => {
     return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
       const projectId = parseProjectId(request.params);
-      await projectService.deleteProject(projectId);
+      await projectService.deleteProject(userId, projectId);
 
       return {
         statusCode: 204
       };
     });
   });
+}
+
+function unauthorizedResponse() {
+  return {
+    statusCode: 401,
+    payload: {
+      error: {
+        code: 'unauthorized',
+        message: 'Missing or invalid authentication token.'
+      }
+    }
+  };
 }
 
 async function handleRequest(
