@@ -3,7 +3,9 @@ import { loadPlatformConfig, createDatabasePool, checkDatabaseReadiness } from '
 import {
   MariaDbProjectRepository,
   MariaDbTaskRepository,
+  OpenAiTaskSuggestionGenerator,
   ProjectService,
+  ProjectTaskSuggestionService,
   TaskService,
   runTaskMigrations
 } from '../tasks';
@@ -34,9 +36,21 @@ async function start(): Promise<void> {
   const taskRepository = new MariaDbTaskRepository(pool);
   const projectService = new ProjectService(projectRepository, taskRepository);
   const taskService = new TaskService(taskRepository, projectRepository);
+  const taskSuggestionGenerator = new OpenAiTaskSuggestionGenerator({
+    baseUrl: config.llm.apiBaseUrl,
+    apiKey: config.llm.apiKey,
+    model: config.llm.model,
+    timeoutMs: config.llm.timeoutMs
+  });
+  const projectTaskSuggestionService = new ProjectTaskSuggestionService(
+    projectRepository,
+    taskRepository,
+    taskSuggestionGenerator
+  );
 
   const server = await createPlatformServer({
     projectService,
+    projectTaskSuggestionService,
     taskService,
     authService,
     userService,

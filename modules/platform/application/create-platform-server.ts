@@ -45,7 +45,12 @@ export async function createPlatformServer(
   await registerHealthRoutes(server, dependencies.isDatabaseReady);
   await registerAuthRoutes(server, dependencies.authService);
   await registerUserRoutes(server, dependencies.userService, resolveAuthenticatedActor);
-  await registerProjectRoutes(server, dependencies.projectService, resolveAuthenticatedUserId);
+  await registerProjectRoutes(
+    server,
+    dependencies.projectService,
+    dependencies.projectTaskSuggestionService,
+    resolveAuthenticatedUserId
+  );
   await registerTaskRoutes(server, dependencies.taskService, resolveAuthenticatedUserId);
 
   return server;

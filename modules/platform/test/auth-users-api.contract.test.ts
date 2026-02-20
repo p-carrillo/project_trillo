@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createPlatformServer } from '../application';
-import { ProjectService, TaskService } from '../../tasks/application';
+import { ProjectService, ProjectTaskSuggestionService, TaskService } from '../../tasks/application';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
+import { FakeTaskSuggestionGenerator } from '../../tasks/test/helpers/fake-task-suggestion-generator';
 import { AuthService, UserService } from '../../users/application';
 import { InMemoryUserRepository } from '../../users/test/helpers/in-memory-user-repository';
 import { FakeAccessTokenService } from '../../users/test/helpers/fake-access-token-service';
@@ -171,11 +172,18 @@ async function createTestServer() {
 
   const projectService = new ProjectService(projectRepository, taskRepository, () => now);
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
+  const projectTaskSuggestionService = new ProjectTaskSuggestionService(
+    projectRepository,
+    taskRepository,
+    new FakeTaskSuggestionGenerator(),
+    () => now
+  );
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
 
   const server = await createPlatformServer({
     projectService,
+    projectTaskSuggestionService,
     taskService,
     authService,
     userService,

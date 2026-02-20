@@ -9,22 +9,28 @@ interface EditProjectPanelProps {
   isOpen: boolean;
   isSubmitting: boolean;
   isDeleting: boolean;
+  isGeneratingSuggestions: boolean;
+  canGenerateSuggestions: boolean;
   form: ProjectFormState;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateField: (field: keyof ProjectFormState, value: string) => void;
   onDeleteProject: () => void;
+  onGenerateTaskSuggestions: () => void;
 }
 
 export function EditProjectPanel({
   isOpen,
   isSubmitting,
   isDeleting,
+  isGeneratingSuggestions,
+  canGenerateSuggestions,
   form,
   onClose,
   onSubmit,
   onUpdateField,
-  onDeleteProject
+  onDeleteProject,
+  onGenerateTaskSuggestions
 }: EditProjectPanelProps) {
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +75,17 @@ export function EditProjectPanel({
           maxLength={4000}
           rows={4}
         />
+
+        <div className="form-inline-actions">
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={onGenerateTaskSuggestions}
+            disabled={!canGenerateSuggestions || isSubmitting || isDeleting || isGeneratingSuggestions}
+          >
+            {isGeneratingSuggestions ? 'Generating suggestions...' : 'Suggest tasks'}
+          </button>
+        </div>
 
         <div className="form-actions">
           <button

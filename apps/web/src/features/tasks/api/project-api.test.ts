@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createProject, deleteProject, updateProject } from './project-api';
+import {
+  applyProjectTaskSuggestions,
+  createProject,
+  deleteProject,
+  previewProjectTaskSuggestions,
+  updateProject
+} from './project-api';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -75,5 +81,65 @@ describe('project-api request headers', () => {
     expect(init.method).toBe('DELETE');
     expect(init.body).toBeUndefined();
     expect(headers.has('Content-Type')).toBe(false);
+  });
+
+  it('does not add content-type for preview requests without body', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+          meta: {
+            projectId: 'project-alpha',
+            total: 0
+          }
+        }),
+        { status: 200 }
+      )
+    );
+
+    await previewProjectTaskSuggestions('project-alpha');
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeUndefined();
+    expect(headers.has('Content-Type')).toBe(false);
+  });
+
+  it('adds application/json content-type for apply suggestions requests', async () => {
+    const suggestions = [
+      {
+        suggestionId: 'epic-core',
+        title: 'Core Epic',
+        description: 'Organize implementation milestones.',
+        category: 'Product',
+        priority: 'high' as const,
+        taskType: 'epic' as const,
+        epicSuggestionId: null
+      }
+    ];
+
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+          meta: {
+            projectId: 'project-alpha',
+            total: 0
+          }
+        }),
+        { status: 201 }
+      )
+    );
+
+    await applyProjectTaskSuggestions('project-alpha', suggestions);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+
+    expect(init.method).toBe('POST');
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(init.body).toBe(JSON.stringify({ suggestions }));
   });
 });

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createPlatformServer } from '../application';
-import { ProjectService, TaskService } from '../../tasks/application';
+import { ProjectService, ProjectTaskSuggestionService, TaskService } from '../../tasks/application';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
+import { FakeTaskSuggestionGenerator } from '../../tasks/test/helpers/fake-task-suggestion-generator';
 import { AuthService, UserService } from '../../users/application';
 import { InMemoryUserRepository } from '../../users/test/helpers/in-memory-user-repository';
 import { FakeAccessTokenService } from '../../users/test/helpers/fake-access-token-service';
@@ -24,6 +25,24 @@ describe('Task API contract with tenancy', () => {
         message: 'Missing or invalid authentication token.'
       }
     });
+
+    await server.close();
+  });
+
+  it('returns 401 for task suggestion preview without token', async () => {
+    const { server, projectService, userAlpha } = await createTestServer();
+
+    const project = await projectService.createProject(userAlpha.user.id, {
+      name: 'Alpha Project',
+      description: 'Product setup and delivery planning.'
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${project.id}/task-suggestions/preview`
+    });
+
+    expect(response.statusCode).toBe(401);
 
     await server.close();
   });
@@ -150,6 +169,94 @@ describe('Task API contract with tenancy', () => {
 
     await server.close();
   });
+
+  it('previews and applies task suggestions for a described project', async () => {
+    const { server, projectService, userAlpha } = await createTestServer();
+
+    const project = await projectService.createProject(userAlpha.user.id, {
+      name: 'LLM Project',
+      description: 'A project to validate automated task suggestions from LLM context.'
+    });
+
+    const previewResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${project.id}/task-suggestions/preview`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(previewResponse.statusCode).toBe(200);
+    expect(previewResponse.json()).toMatchObject({
+      meta: {
+        projectId: project.id,
+        total: 3
+      }
+    });
+
+    const suggestions = previewResponse.json().data as Array<Record<string, unknown>>;
+
+    const applyResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${project.id}/task-suggestions/apply`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        suggestions
+      }
+    });
+
+    expect(applyResponse.statusCode).toBe(201);
+    expect(applyResponse.json()).toMatchObject({
+      meta: {
+        projectId: project.id,
+        total: 3
+      }
+    });
+
+    const tasksResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/tasks?boardId=${project.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(tasksResponse.statusCode).toBe(200);
+    expect(tasksResponse.json()).toMatchObject({
+      meta: {
+        total: 3
+      }
+    });
+
+    await server.close();
+  });
+
+  it('returns 409 when preview is requested without project description', async () => {
+    const { server, projectService, userAlpha } = await createTestServer();
+
+    const project = await projectService.createProject(userAlpha.user.id, {
+      name: 'Descriptionless Project'
+    });
+
+    const previewResponse = await server.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${project.id}/task-suggestions/preview`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(previewResponse.statusCode).toBe(409);
+    expect(previewResponse.json()).toMatchObject({
+      error: {
+        code: 'project_description_required'
+      }
+    });
+
+    await server.close();
+  });
 });
 
 async function createTestServer() {
@@ -162,6 +269,12 @@ async function createTestServer() {
 
   const projectService = new ProjectService(projectRepository, taskRepository, () => now);
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
+  const projectTaskSuggestionService = new ProjectTaskSuggestionService(
+    projectRepository,
+    taskRepository,
+    new FakeTaskSuggestionGenerator(),
+    () => now
+  );
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
 
@@ -181,6 +294,7 @@ async function createTestServer() {
 
   const server = await createPlatformServer({
     projectService,
+    projectTaskSuggestionService,
     taskService,
     authService,
     userService,

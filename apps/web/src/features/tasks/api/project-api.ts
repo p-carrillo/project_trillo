@@ -1,8 +1,12 @@
 import type {
+  ApplyTaskSuggestionsRequest,
+  ApplyTaskSuggestionsResponse,
   CreateProjectRequest,
   ListProjectsResponse,
+  ProjectTaskSuggestionsPreviewResponse,
   ProjectDto,
   ProjectResponse,
+  TaskSuggestionDto,
   UpdateProjectRequest
 } from '@trillo/contracts';
 import { isApiRequestError, requestJson } from '../../shared/api/api-request';
@@ -34,6 +38,32 @@ export async function updateProject(projectId: string, input: UpdateProjectReque
     method: 'PATCH',
     body: JSON.stringify(input)
   });
+
+  return response.data;
+}
+
+export async function previewProjectTaskSuggestions(projectId: string): Promise<TaskSuggestionDto[]> {
+  const response = await requestJson<ProjectTaskSuggestionsPreviewResponse>(
+    `${BASE_PATH}/projects/${encodeURIComponent(projectId)}/task-suggestions/preview`,
+    {
+      method: 'POST'
+    }
+  );
+
+  return response.data;
+}
+
+export async function applyProjectTaskSuggestions(
+  projectId: string,
+  suggestions: TaskSuggestionDto[]
+): Promise<ApplyTaskSuggestionsResponse['data']> {
+  const response = await requestJson<ApplyTaskSuggestionsResponse>(
+    `${BASE_PATH}/projects/${encodeURIComponent(projectId)}/task-suggestions/apply`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ suggestions } satisfies ApplyTaskSuggestionsRequest)
+    }
+  );
 
   return response.data;
 }

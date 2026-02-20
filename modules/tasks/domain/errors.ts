@@ -79,3 +79,21 @@ export class ProjectNameTakenError extends TaskDomainError {
     super('project_name_taken', `Project ${projectName} already exists.`);
   }
 }
+
+export class ProjectDescriptionRequiredError extends TaskDomainError {
+  constructor(projectId: string) {
+    super('project_description_required', `Project ${projectId} requires a description to generate task suggestions.`);
+  }
+}
+
+export class TaskGenerationUnavailableError extends TaskDomainError {
+  constructor(message = 'Task suggestion generation is currently unavailable.') {
+    super('task_generation_unavailable', message);
+  }
+}
+
+export class InvalidTaskSuggestionsError extends TaskDomainError {
+  constructor(message: string) {
+    super('invalid_task_suggestions', message);
+  }
+}

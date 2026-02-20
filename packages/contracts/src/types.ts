@@ -87,6 +87,24 @@ export interface ProjectResponse {
   data: ProjectDto;
 }
 
+export interface TaskSuggestionDto {
+  suggestionId: string;
+  title: string;
+  description: string | null;
+  category: string;
+  priority: TaskPriority;
+  taskType: TaskType;
+  epicSuggestionId: string | null;
+}
+
+export interface ProjectTaskSuggestionsPreviewResponse {
+  data: TaskSuggestionDto[];
+  meta: {
+    projectId: ProjectId;
+    total: number;
+  };
+}
+
 export interface TaskDto {
   id: TaskId;
   boardId: BoardId;
@@ -134,6 +152,18 @@ export interface UpdateTaskRequest {
 
 export interface TaskResponse {
   data: TaskDto;
+}
+
+export interface ApplyTaskSuggestionsRequest {
+  suggestions: TaskSuggestionDto[];
+}
+
+export interface ApplyTaskSuggestionsResponse {
+  data: TaskDto[];
+  meta: {
+    projectId: ProjectId;
+    total: number;
+  };
 }
 
 export interface ApiErrorResponse {

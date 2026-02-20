@@ -1,6 +1,12 @@
 export interface PlatformConfig {
   host: string;
   port: number;
+  llm: {
+    apiBaseUrl: string;
+    apiKey: string;
+    model: string;
+    timeoutMs: number;
+  };
   auth: {
     jwtAccessSecret: string;
     jwtAccessExpiresInSeconds: number;
@@ -17,6 +23,10 @@ export interface PlatformConfig {
 export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   const host = env.HOST?.trim() || '0.0.0.0';
   const port = parseNumericEnv(env.PORT, 3000, 'PORT');
+  const llmApiBaseUrl = env.LLM_API_BASE_URL?.trim() || 'https://api.openai.com/v1';
+  const llmApiKey = env.LLM_API_KEY?.trim() || '';
+  const llmModel = env.LLM_API_MODEL?.trim() || 'gpt-4o-mini';
+  const llmTimeoutMs = parseNumericEnv(env.LLM_API_TIMEOUT_MS, 10000, 'LLM_API_TIMEOUT_MS');
 
   const dbHost = env.DB_HOST?.trim() || 'mariadb';
   const dbPort = parseNumericEnv(env.DB_PORT, 3306, 'DB_PORT');
@@ -34,6 +44,12 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   return {
     host,
     port,
+    llm: {
+      apiBaseUrl: llmApiBaseUrl,
+      apiKey: llmApiKey,
+      model: llmModel,
+      timeoutMs: llmTimeoutMs
+    },
     auth: {
       jwtAccessSecret,
       jwtAccessExpiresInSeconds

@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { taskStatuses, type CreateTaskRequest, type ProjectDto, type TaskDto, type TaskStatus, type UpdateTaskRequest } from '@trillo/contracts';
+import {
+  taskStatuses,
+  type CreateTaskRequest,
+  type ProjectDto,
+  type TaskDto,
+  type TaskStatus,
+  type TaskSuggestionDto,
+  type UpdateTaskRequest
+} from '@trillo/contracts';
 import {
   createTask,
   deleteTask,
@@ -9,10 +17,12 @@ import {
   updateTask
 } from '../api/task-api';
 import {
+  applyProjectTaskSuggestions,
   createProject as createProjectRecord,
   deleteProject as deleteProjectRecord,
   fetchProjects,
   isProjectApiError,
+  previewProjectTaskSuggestions,
   updateProject as updateProjectRecord
 } from '../api/project-api';
 import { buildTaskBoardColumns } from '../board/board-model';
@@ -24,6 +34,7 @@ import { CreateTaskPanel } from './create-task-panel';
 import { EditProjectPanel } from './edit-project-panel';
 import { ConfirmActionDialog } from './confirm-action-dialog';
 import { EpicTabs } from './epic-tabs';
+import { TaskSuggestionsPreviewDialog } from './task-suggestions-preview-dialog';
 
 const ACTIVE_PROJECT_STORAGE_KEY = 'trillo.active-project.v1';
 const CUSTOM_COLUMNS_STORAGE_KEY_PREFIX = 'trillo.custom-columns.v2.';
@@ -83,8 +94,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
+  const [isGeneratingTaskSuggestions, setIsGeneratingTaskSuggestions] = useState(false);
+  const [isApplyingTaskSuggestions, setIsApplyingTaskSuggestions] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isDeletingProjectId, setIsDeletingProjectId] = useState<string | null>(null);
+  const [previewTaskSuggestions, setPreviewTaskSuggestions] = useState<TaskSuggestionDto[] | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -194,6 +208,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
         return;
       }
 
+      if (previewTaskSuggestions) {
+        setPreviewTaskSuggestions(null);
+        return;
+      }
+
       if (deleteTarget) {
         setDeleteTarget(null);
         return;
@@ -219,16 +238,16 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [deleteTarget, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen]);
+  }, [deleteTarget, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen, previewTaskSuggestions]);
 
   useEffect(() => {
-    const hasOpenOverlay = Boolean(deleteTarget) || isAnyPanelOpen || isSidebarOpen;
+    const hasOpenOverlay = Boolean(previewTaskSuggestions) || Boolean(deleteTarget) || isAnyPanelOpen || isSidebarOpen;
     document.body.classList.toggle('body-scroll-lock', hasOpenOverlay);
 
     return () => {
       document.body.classList.remove('body-scroll-lock');
     };
-  }, [deleteTarget, isAnyPanelOpen, isSidebarOpen]);
+  }, [deleteTarget, isAnyPanelOpen, isSidebarOpen, previewTaskSuggestions]);
 
   useEffect(() => {
     if (selectedEpicId === 'all') {
@@ -306,6 +325,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }
 
     setErrorMessage(null);
+    setPreviewTaskSuggestions(null);
     setIsSidebarOpen(false);
     setIsCreatePanelOpen(false);
     setEditingTaskId(null);
@@ -363,6 +383,49 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       handleUiError(error);
     } finally {
       setIsSubmittingProject(false);
+    }
+  }
+
+  async function handleGenerateTaskSuggestions() {
+    if (!editingProjectId) {
+      return;
+    }
+
+    const hasDescription = projectForm.description.trim().length > 0;
+    if (!hasDescription) {
+      setErrorMessage('Project description is required to generate suggestions.');
+      return;
+    }
+
+    setIsGeneratingTaskSuggestions(true);
+    setErrorMessage(null);
+
+    try {
+      const suggestions = await previewProjectTaskSuggestions(editingProjectId);
+      setPreviewTaskSuggestions(suggestions);
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setIsGeneratingTaskSuggestions(false);
+    }
+  }
+
+  async function handleApplyTaskSuggestions() {
+    if (!editingProjectId || !previewTaskSuggestions || previewTaskSuggestions.length === 0) {
+      return;
+    }
+
+    setIsApplyingTaskSuggestions(true);
+    setErrorMessage(null);
+
+    try {
+      const createdTasks = await applyProjectTaskSuggestions(editingProjectId, previewTaskSuggestions);
+      setTasks((current) => [...createdTasks.map((task) => normalizeTaskDto(task)), ...current]);
+      setPreviewTaskSuggestions(null);
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setIsApplyingTaskSuggestions(false);
     }
   }
 
@@ -577,6 +640,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }
 
     setErrorMessage(null);
+    setPreviewTaskSuggestions(null);
     setIsSidebarOpen(false);
     setIsCreatePanelOpen(false);
     setIsProjectPanelOpen(false);
@@ -602,6 +666,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function handleToggleSidebar() {
+    setPreviewTaskSuggestions(null);
     setIsCreatePanelOpen(false);
     setIsProjectPanelOpen(false);
     setEditingTaskId(null);
@@ -615,6 +680,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }
 
     setIsSidebarOpen(false);
+    setPreviewTaskSuggestions(null);
     setIsProjectPanelOpen(false);
     resetProjectFormState();
     resetFormState(selectedProjectId);
@@ -627,6 +693,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function handleCloseProjectPanel() {
+    setPreviewTaskSuggestions(null);
     setIsProjectPanelOpen(false);
     resetProjectFormState();
   }
@@ -794,6 +861,8 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
             isOpen={isProjectPanelOpen}
             isSubmitting={isSubmittingProject}
             isDeleting={Boolean(editingProjectId && isDeletingProjectId === editingProjectId)}
+            isGeneratingSuggestions={isGeneratingTaskSuggestions}
+            canGenerateSuggestions={projectForm.description.trim().length > 0}
             form={projectForm}
             onClose={handleCloseProjectPanel}
             onSubmit={handleSubmitProjectUpdate}
@@ -804,6 +873,18 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
               }
 
               handleRequestDeleteProject(editingProject.id);
+            }}
+            onGenerateTaskSuggestions={() => {
+              void handleGenerateTaskSuggestions();
+            }}
+          />
+          <TaskSuggestionsPreviewDialog
+            isOpen={Boolean(previewTaskSuggestions)}
+            suggestions={previewTaskSuggestions ?? []}
+            isApplying={isApplyingTaskSuggestions}
+            onCancel={() => setPreviewTaskSuggestions(null)}
+            onConfirm={() => {
+              void handleApplyTaskSuggestions();
             }}
           />
           <ConfirmActionDialog

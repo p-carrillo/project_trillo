@@ -13,6 +13,8 @@ Fullstack task manager with Hexagonal Architecture in the backend, shared contra
 - `GET /api/v1/projects`
 - `POST /api/v1/projects`
 - `DELETE /api/v1/projects/:projectId`
+- `POST /api/v1/projects/:projectId/task-suggestions/preview`
+- `POST /api/v1/projects/:projectId/task-suggestions/apply`
 - `GET /api/v1/tasks?boardId=<id>`
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/:taskId/status`

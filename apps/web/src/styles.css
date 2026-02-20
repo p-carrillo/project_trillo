@@ -969,12 +969,78 @@ select {
   font-size: 0.8rem;
 }
 
+.form-inline-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .form-actions {
   margin-top: 0.74rem;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.52rem;
+}
+
+.task-suggestions-dialog {
+  width: min(560px, 100%);
+}
+
+.task-suggestions-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+}
+
+.task-suggestion-item {
+  border: 1px solid var(--border-soft);
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.task-suggestion-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.task-suggestion-item-head strong {
+  font-size: 0.92rem;
+}
+
+.task-suggestion-item-type {
+  border: 1px solid var(--border-soft);
+  padding: 0.14rem 0.34rem;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.task-suggestion-item p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.38;
+}
+
+.task-suggestion-item-meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.task-suggestion-item-meta span {
+  border: 1px solid var(--border-soft);
+  background: #fbfbfc;
+  padding: 0.12rem 0.3rem;
+  font-size: 0.74rem;
+  color: #4a5060;
 }
 
 .sr-only {
