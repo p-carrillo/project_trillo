@@ -107,11 +107,28 @@ jobs:
             set -euo pipefail
             cd ${{ secrets.DEPLOY_PATH }}
 
+            if [ ! -f .env ]; then
+              echo "Missing .env at ${{ secrets.DEPLOY_PATH }}/.env"
+              exit 1
+            fi
+
+            set -a
+            . ./.env
+            set +a
+
+            for key in DB_ROOT_PASSWORD DB_NAME DB_USER DB_PASSWORD MCP_API_KEY JWT_ACCESS_SECRET; do
+              eval "value=\${$key:-}"
+              if [ -z "$value" ]; then
+                echo "Missing or empty required env in .env: $key"
+                exit 1
+              fi
+            done
+
             echo "Building and starting containers..."
-            docker compose -f docker/compose.prod.yml up -d --build --remove-orphans mariadb backend web
+            docker compose --env-file .env -f docker/compose.prod.yml up -d --build --remove-orphans mariadb backend web
 
             echo "Current container status:"
-            docker compose -f docker/compose.prod.yml ps
+            docker compose --env-file .env -f docker/compose.prod.yml ps
           ENDSSH
 
       - name: Verify deployment health
