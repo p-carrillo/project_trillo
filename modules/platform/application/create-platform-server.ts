@@ -60,6 +60,15 @@ export async function createPlatformServer(
       return;
     }
 
+    if (request.url === '/api/v1/auth/login' || request.url === '/api/v1/auth/register') {
+      return;
+    }
+
+    const authorizationHeader = request.headers.authorization;
+    if (typeof authorizationHeader === 'string' && authorizationHeader.startsWith('Bearer ')) {
+      return;
+    }
+
     const headerValue = request.headers['x-api-key'];
     const apiKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
     if (apiKey === security.httpApiKey) {
