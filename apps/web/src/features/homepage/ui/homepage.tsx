@@ -1,32 +1,26 @@
-import {
-  developerSignals,
-  footerLinkGroups,
-  homepageFeatureCards
-} from '../content/public-docs';
+import { developerSignals, homepageFeatureCards } from '../content/public-docs';
 
 interface HomepageProps {
   onLoginClick: () => void;
-  onDocsClick: () => void;
-  onDocClick: (slug: string) => void;
+  onMcpClick: () => void;
   onAlphaAccessClick: () => void;
 }
 
-export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessClick }: HomepageProps) {
+export function Homepage({ onLoginClick, onMcpClick, onAlphaAccessClick }: HomepageProps) {
   return (
     <main className="homepage" aria-label="MonoTask homepage">
       <header className="homepage-nav">
-        <div className="homepage-brand" aria-label="MonoTask">
-          <span className="homepage-brand-mark">M</span>
-          <span className="homepage-brand-name">MonoTask</span>
-        </div>
+        <div className="homepage-nav-inner">
+          <div className="homepage-brand" aria-label="MonoTask">
+            <span className="homepage-brand-mark">M</span>
+            <span className="homepage-brand-name">MonoTask</span>
+          </div>
 
-        <div className="homepage-nav-actions">
-          <button type="button" className="homepage-link-muted" onClick={onDocsClick}>
-            Documentation
-          </button>
-          <button type="button" className="primary-btn" onClick={onLoginClick}>
-            Login
-          </button>
+          <div className="homepage-nav-actions">
+            <button type="button" className="primary-btn" onClick={onLoginClick}>
+              Login
+            </button>
+          </div>
         </div>
       </header>
 
@@ -36,7 +30,7 @@ export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessC
         </h1>
         <p>
           Plan faster, break down work clearly, and move from epic to done without chaos. MonoTask helps developers
-          manage tasks with structure, speed, and focus.
+          manage tasks with structure, speed, and focus. Built to be self-hosted from day one.
         </p>
 
         <div className="homepage-hero-actions">
@@ -109,16 +103,16 @@ export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessC
         </article>
 
         <div className="homepage-signals" aria-label="Developer capabilities">
-          <p>Built for solo developers working with</p>
+          <p>Built for solo developers who value</p>
           <ul>
             {developerSignals.map((item) => (
               <li key={item.label}>
                 <a
-                  href={createDocPath(item.docSlug)}
+                  href="/mcp"
                   className="homepage-link-inline"
                   onClick={(event) => {
                     event.preventDefault();
-                    onDocClick(item.docSlug);
+                    onMcpClick();
                   }}
                 >
                   {item.label}
@@ -140,30 +134,35 @@ export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessC
             <article key={feature.title} className="homepage-feature-card">
               <h3>{feature.title}</h3>
               <p>{feature.description}</p>
-              <a
-                href={createDocPath(feature.docSlug)}
-                className="homepage-link-inline"
-                onClick={(event) => {
-                  event.preventDefault();
-                  onDocClick(feature.docSlug);
-                }}
-              >
-                Open documentation
-              </a>
+              {feature.linkHref && feature.linkLabel ? (
+                <a
+                  href={feature.linkHref}
+                  className="homepage-link-inline"
+                  {...(feature.isExternalLink ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  onClick={(event) => {
+                    if (feature.linkHref === '/mcp') {
+                      event.preventDefault();
+                      onMcpClick();
+                    }
+                  }}
+                >
+                  {feature.linkLabel}
+                </a>
+              ) : null}
             </article>
           ))}
         </div>
       </section>
 
       <section className="homepage-cta" id="start" aria-label="Call to action">
-        <h2>Ready to regain your focus?</h2>
-        <p>Built for developers who want to ship faster with structured execution workflows.</p>
+        <h2>Ready for simpler task management?</h2>
+        <p>Keep your day clear with straightforward boards, practical planning, and zero noise.</p>
         <div className="homepage-cta-actions">
           <button type="button" className="primary-btn" onClick={onLoginClick}>
             Login
           </button>
-          <button type="button" className="ghost-btn" onClick={onDocsClick}>
-            Browse Public Docs
+          <button type="button" className="ghost-btn" onClick={onMcpClick}>
+            Open MCP Guide
           </button>
         </div>
       </section>
@@ -174,39 +173,44 @@ export function Homepage({ onLoginClick, onDocsClick, onDocClick, onAlphaAccessC
             <span className="homepage-brand-mark">M</span>
             <span className="homepage-brand-name">MonoTask</span>
           </div>
-          <p>Minimal task management for developer-first workflows, with agentic mode on the roadmap.</p>
+          <p>Simple task management for solo developers who want clarity and consistent delivery.</p>
         </div>
 
-        {footerLinkGroups.map((group) => (
-          <nav key={group.heading} aria-label={`${group.heading} links`}>
-            <h3>{group.heading}</h3>
-            <ul>
-              {group.links.map((link) => (
-                <li key={link.slug}>
-                  <a
-                    href={createDocPath(link.slug)}
-                    className="homepage-footer-link"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      onDocClick(link.slug);
-                    }}
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ))}
+        <nav aria-label="Resources links">
+          <h3>Resources</h3>
+          <ul>
+            <li>
+              <a
+                href="/mcp"
+                className="homepage-footer-link"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onMcpClick();
+                }}
+              >
+                MCP Guide
+              </a>
+            </li>
+          </ul>
+        </nav>
+
+        <a
+          href="https://github.com/p-carrillo/project_trillo"
+          className="homepage-footer-social-link"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="MonoTask GitHub repository"
+          title="GitHub"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.66-.22.66-.49 0-.24-.01-.88-.01-1.72-2.78.62-3.37-1.38-3.37-1.38-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.05 1.53 1.05.89 1.58 2.34 1.12 2.9.85.09-.66.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.08 0-1.12.39-2.03 1.03-2.75-.1-.27-.45-1.32.1-2.76 0 0 .84-.28 2.75 1.05A9.27 9.27 0 0 1 12 6.94c.85 0 1.71.12 2.52.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.44.2 2.49.1 2.76.64.72 1.03 1.63 1.03 2.75 0 3.95-2.34 4.81-4.57 5.06.36.31.68.92.68 1.86 0 1.35-.01 2.43-.01 2.76 0 .27.17.59.67.49A10.25 10.25 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
+            />
+          </svg>
+          <span>GitHub</span>
+        </a>
       </footer>
     </main>
   );
-}
-
-function createDocPath(slug: string): string {
-  if (slug === 'docs') {
-    return '/docs';
-  }
-
-  return `/docs/${encodeURIComponent(slug)}`;
 }

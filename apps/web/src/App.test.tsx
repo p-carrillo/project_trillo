@@ -65,9 +65,33 @@ describe('App auth routing', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'The task manager for solo developers' })).toBeInTheDocument();
-    expect(screen.getByText('Built for solo developers working with')).toBeInTheDocument();
+    expect(screen.getByText(/Built to be self-hosted from day one\./)).toBeInTheDocument();
+    expect(screen.getByText('Built for solo developers who value')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Login' }).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Ask for Alpha Access' })).toBeInTheDocument();
+  });
+
+  it('renders feature cards with selective links', async () => {
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'MCP Ready' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Simple board, no corporate noise' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Self-hosted ready' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open MCP guide' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open repository' })).toHaveAttribute(
+      'href',
+      'https://github.com/p-carrillo/project_trillo'
+    );
+    expect(screen.queryByRole('link', { name: 'Simple board, no corporate noise' })).not.toBeInTheDocument();
+  });
+
+  it('renders github repository link in homepage footer', async () => {
+    render(<App />);
+
+    expect(screen.getByRole('link', { name: 'MonoTask GitHub repository' })).toHaveAttribute(
+      'href',
+      'https://github.com/p-carrillo/project_trillo'
+    );
   });
 
   it('opens login modal from homepage', async () => {
@@ -103,24 +127,20 @@ describe('App auth routing', () => {
     expect(window.location.pathname).toBe('/u/john_doe');
   });
 
-  it('navigates to public documentation page from homepage footer', async () => {
+  it('navigates to MCP route from homepage footer link', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole('link', { name: 'Documentation' }));
+    await user.click(screen.getByRole('link', { name: 'MCP Guide' }));
 
-    expect(screen.getByRole('heading', { name: 'Documentation' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/docs/documentation');
+    expect(screen.getByRole('heading', { name: 'MCP Route' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/mcp');
   });
 
-  it('navigates to docs index route from the Docs footer link', async () => {
-    const user = userEvent.setup();
+  it('does not render MCP button in top navigation', async () => {
     render(<App />);
 
-    await user.click(screen.getByRole('link', { name: 'Docs' }));
-
-    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/docs');
+    expect(screen.queryByRole('button', { name: 'MCP' })).not.toBeInTheDocument();
   });
 
   it('navigates to alpha access page from homepage secondary call to action', async () => {
@@ -140,39 +160,32 @@ describe('App auth routing', () => {
 
     expect(screen.getByRole('heading', { name: 'MonoTask is currently in private alpha.' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'hi@diteria.net' })).toHaveAttribute('href', 'mailto:hi@diteria.net');
+    expect(screen.getByRole('link', { name: 'Open GitHub repository' })).toHaveAttribute(
+      'href',
+      'https://github.com/p-carrillo/project_trillo'
+    );
   });
 
-  it('renders public docs detail page on /docs/:slug route', async () => {
+  it('renders MCP page on /mcp route', async () => {
+    window.history.replaceState({}, '', '/mcp');
+
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'MCP Route' })).toBeInTheDocument();
+    expect(screen.getByText('Route: /mcp')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'https://github.com/p-carrillo/project_trillo' })).toHaveAttribute(
+      'href',
+      'https://github.com/p-carrillo/project_trillo'
+    );
+  });
+
+  it('normalizes legacy docs routes to /mcp', async () => {
     window.history.replaceState({}, '', '/docs/task-specs');
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'Task Specs' })).toBeInTheDocument();
-    expect(screen.getByText('Developers | Available now')).toBeInTheDocument();
-  });
-
-  it('returns to docs index from a docs detail page', async () => {
-    const user = userEvent.setup();
-    window.history.replaceState({}, '', '/docs/task-specs');
-
-    render(<App />);
-    await user.click(screen.getByRole('button', { name: 'Open docs index' }));
-
-    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/docs');
-  });
-
-  it('navigates to docs index from breadcrumb on docs detail page', async () => {
-    const user = userEvent.setup();
-    window.history.replaceState({}, '', '/docs/task-specs');
-
-    render(<App />);
-
-    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    await user.click(within(breadcrumb).getByRole('link', { name: 'Docs' }));
-
-    expect(screen.getByRole('heading', { name: 'Documentation Index' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/docs');
+    expect(screen.getByRole('heading', { name: 'MCP Route' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/mcp');
   });
 
   it('redirects mismatched /u/:username to authenticated canonical path', async () => {

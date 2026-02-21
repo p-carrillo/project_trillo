@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { BoardHeader } from './board-header';
 
 describe('BoardHeader', () => {
-  it('renders robo mode toggle with tooltip and triggers toggle callback', () => {
-    const onToggleRoboMode = vi.fn();
+  it('renders project header controls and triggers callbacks', () => {
+    const onToggleSidebar = vi.fn();
+    const onSearchTextChange = vi.fn();
+    const onOpenCreatePanel = vi.fn();
 
     render(
       <BoardHeader
@@ -12,42 +14,36 @@ describe('BoardHeader', () => {
         projectName="Project Alpha"
         searchText=""
         canCreateTask
-        isRoboModeEnabled={false}
-        onToggleSidebar={vi.fn()}
-        onSearchTextChange={vi.fn()}
-        onToggleRoboMode={onToggleRoboMode}
-        onOpenCreatePanel={vi.fn()}
+        onToggleSidebar={onToggleSidebar}
+        onSearchTextChange={onSearchTextChange}
+        onOpenCreatePanel={onOpenCreatePanel}
       />
     );
 
-    const toggleButton = screen.getByRole('button', { name: 'Enable Robo mode' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace menu' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search tasks' }), {
+      target: { value: 'infra' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'New Task +' }));
 
-    expect(toggleButton).toHaveAttribute('title', 'Robo mode');
-    expect(toggleButton).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(toggleButton);
-
-    expect(onToggleRoboMode).toHaveBeenCalledTimes(1);
+    expect(onToggleSidebar).toHaveBeenCalledTimes(1);
+    expect(onSearchTextChange).toHaveBeenCalledWith('infra');
+    expect(onOpenCreatePanel).toHaveBeenCalledTimes(1);
   });
 
-  it('shows enabled robo mode state', () => {
+  it('disables create task button when creation is not allowed', () => {
     render(
       <BoardHeader
         isSidebarOpen={false}
         projectName="Project Alpha"
         searchText=""
-        canCreateTask
-        isRoboModeEnabled
+        canCreateTask={false}
         onToggleSidebar={vi.fn()}
         onSearchTextChange={vi.fn()}
-        onToggleRoboMode={vi.fn()}
         onOpenCreatePanel={vi.fn()}
       />
     );
 
-    const toggleButton = screen.getByRole('button', { name: 'Disable Robo mode' });
-
-    expect(toggleButton).toHaveAttribute('aria-pressed', 'true');
-    expect(toggleButton).toHaveClass('robo-toggle--on');
+    expect(screen.getByRole('button', { name: 'New Task +' })).toBeDisabled();
   });
 });

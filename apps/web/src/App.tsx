@@ -3,10 +3,9 @@ import type { AuthSessionResponse, UserDto } from '@trillo/contracts';
 import { WorkspaceApp } from './features/tasks/ui/workspace-app';
 import { Homepage } from './features/homepage/ui/homepage';
 import { AlphaAccessPage } from './features/homepage/ui/alpha-access-page';
-import { PublicDocsPage } from './features/homepage/ui/public-docs-page';
+import { McpPage } from './features/homepage/ui/mcp-page';
 import { changeMyPassword, isAuthApiError, loginUser, updateMyProfile } from './features/auth/api/auth-api';
 import { clearSession, readSession, writeSession, type AuthSession } from './features/auth/session-store';
-import { findPublicDoc } from './features/homepage/content/public-docs';
 
 type AppRoute =
   | {
@@ -16,8 +15,7 @@ type AppRoute =
       type: 'alpha-access';
     }
   | {
-      type: 'public-docs';
-      slug: string | null;
+      type: 'mcp';
     }
   | {
       type: 'workspace';
@@ -94,16 +92,12 @@ export function App() {
 
   useEffect(() => {
     const metaDescription = document.querySelector('meta[name="description"]');
-    const docEntry = route.type === 'public-docs' && route.slug ? findPublicDoc(route.slug) : null;
-
-    if (route.type === 'public-docs') {
-      document.title = docEntry ? `${docEntry.title} | MonoTask Docs` : 'Public Documentation | MonoTask';
+    if (route.type === 'mcp') {
+      document.title = 'MCP Guide | MonoTask';
       if (metaDescription) {
         metaDescription.setAttribute(
           'content',
-          docEntry
-            ? docEntry.summary
-            : 'Public documentation for homepage and footer elements, including roadmap visibility.'
+          'MCP setup route for LLM clients, including authentication, startup, and supported tools.'
         );
       }
       return;
@@ -328,7 +322,7 @@ export function App() {
     setIsLoginModalOpen(false);
   }
 
-  if (route.type === 'home' || route.type === 'alpha-access' || route.type === 'public-docs') {
+  if (route.type === 'home' || route.type === 'alpha-access' || route.type === 'mcp') {
     const handleLoginCtaClick = session
       ? () => navigate(createWorkspacePath(session.user.username), false, setRoute)
       : openLoginModal;
@@ -342,19 +336,13 @@ export function App() {
         {route.type === 'home' ? (
           <Homepage
             onLoginClick={handleLoginCtaClick}
-            onDocsClick={() => navigate('/docs', false, setRoute)}
-            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
+            onMcpClick={() => navigate('/mcp', false, setRoute)}
             onAlphaAccessClick={() => navigate('/alpha-access', false, setRoute)}
           />
         ) : null}
 
-        {route.type === 'public-docs' ? (
-          <PublicDocsPage
-            entry={route.slug ? findPublicDoc(route.slug) : null}
-            onHomeClick={() => navigate('/', false, setRoute)}
-            onLoginClick={handleLoginCtaClick}
-            onDocClick={(slug) => navigate(createDocPath(slug), false, setRoute)}
-          />
+        {route.type === 'mcp' ? (
+          <McpPage onHomeClick={() => navigate('/', false, setRoute)} onLoginClick={handleLoginCtaClick} />
         ) : null}
 
         {!session && isLoginModalOpen ? (
@@ -411,10 +399,10 @@ export function App() {
                     className="ghost-btn"
                     onClick={() => {
                       setIsLoginModalOpen(false);
-                      navigate('/docs', false, setRoute);
+                      navigate('/mcp', false, setRoute);
                     }}
                   >
-                    Open Public Docs
+                    Open MCP Guide
                   </button>
                 </div>
               </form>
@@ -556,8 +544,8 @@ function normalizeLegacyPath(pathname: string): string {
     return '/alpha-access';
   }
 
-  if (pathname === '/docs/docs') {
-    return '/docs';
+  if (pathname === '/docs' || pathname.startsWith('/docs/')) {
+    return '/mcp';
   }
 
   return pathname;
@@ -568,20 +556,12 @@ function parseRoute(pathname: string): AppRoute {
     return { type: 'alpha-access' };
   }
 
-  if (pathname === '/docs') {
-    return { type: 'public-docs', slug: null };
+  if (pathname === '/mcp') {
+    return { type: 'mcp' };
   }
 
   if (pathname === '/') {
     return { type: 'home' };
-  }
-
-  const docsMatch = /^\/docs\/([^/]+)$/.exec(pathname);
-  if (docsMatch?.[1]) {
-    return {
-      type: 'public-docs',
-      slug: decodeURIComponent(docsMatch[1])
-    };
   }
 
   const workspaceMatch = /^\/u\/([^/]+)$/.exec(pathname);
@@ -597,14 +577,6 @@ function parseRoute(pathname: string): AppRoute {
 
 function createWorkspacePath(username: string): string {
   return `/u/${encodeURIComponent(username)}`;
-}
-
-function createDocPath(slug: string): string {
-  if (slug === 'docs') {
-    return '/docs';
-  }
-
-  return `/docs/${encodeURIComponent(slug)}`;
 }
 
 function navigate(pathname: string, replace: boolean, setRoute: (route: AppRoute) => void): void {
