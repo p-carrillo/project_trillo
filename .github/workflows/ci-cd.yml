@@ -81,16 +81,16 @@ jobs:
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             set -euo pipefail
-            cat > "${{ secrets.DEPLOY_PATH }}/.env" << 'EOF'
-DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
-DB_NAME=${{ secrets.DB_NAME }}
-DB_USER=${{ secrets.DB_USER }}
-DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-MCP_API_KEY=${{ secrets.MCP_API_KEY }}
-MCP_ACCESS_TOKEN=${{ secrets.MCP_ACCESS_TOKEN }}
-JWT_ACCESS_SECRET=${{ secrets.JWT_ACCESS_SECRET }}
-JWT_ACCESS_EXPIRES_IN=${{ secrets.JWT_ACCESS_EXPIRES_IN }}
-EOF
+            {
+              printf 'DB_ROOT_PASSWORD=%s\n' '${{ secrets.DB_ROOT_PASSWORD }}'
+              printf 'DB_NAME=%s\n' '${{ secrets.DB_NAME }}'
+              printf 'DB_USER=%s\n' '${{ secrets.DB_USER }}'
+              printf 'DB_PASSWORD=%s\n' '${{ secrets.DB_PASSWORD }}'
+              printf 'MCP_API_KEY=%s\n' '${{ secrets.MCP_API_KEY }}'
+              printf 'MCP_ACCESS_TOKEN=%s\n' '${{ secrets.MCP_ACCESS_TOKEN }}'
+              printf 'JWT_ACCESS_SECRET=%s\n' '${{ secrets.JWT_ACCESS_SECRET }}'
+              printf 'JWT_ACCESS_EXPIRES_IN=%s\n' '${{ secrets.JWT_ACCESS_EXPIRES_IN }}'
+            } > "${{ secrets.DEPLOY_PATH }}/.env"
             chmod 600 "${{ secrets.DEPLOY_PATH }}/.env"
             for key in DB_ROOT_PASSWORD DB_NAME DB_USER DB_PASSWORD MCP_API_KEY JWT_ACCESS_SECRET; do
               if ! grep -Eq "^${key}=.+$" "${{ secrets.DEPLOY_PATH }}/.env"; then
