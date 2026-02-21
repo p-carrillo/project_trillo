@@ -139,8 +139,7 @@ jobs:
 
             backend_ok=0
             for attempt in $(seq 1 30); do
-              status=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3000/health/ready || true)
-              if [ "$status" = "200" ]; then
+              if docker compose --env-file .env -f docker/compose.prod.yml exec -T backend node -e "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
                 backend_ok=1
                 break
               fi
