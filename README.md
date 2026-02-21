@@ -106,13 +106,24 @@ Required deploy secrets:
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
 - `DEPLOY_PATH`
+- `DB_ROOT_PASSWORD`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `MCP_API_KEY`
+- `JWT_ACCESS_SECRET`
+
+Optional deploy secrets:
+- `MCP_ACCESS_TOKEN`
+- `JWT_ACCESS_EXPIRES_IN` (defaults to `86400`)
 
 Remote deployment:
 - Syncs code to the host via `rsync`.
-- Starts services with `docker compose -f docker/compose.dev.yml up -d --build`.
+- Writes `${DEPLOY_PATH}/.env` on the server from GitHub Actions secrets.
+- Starts services with `docker compose -f docker/compose.prod.yml up -d --build`.
 - Verifies health at:
   - `http://localhost:3000/health/ready`
-  - `http://localhost:8080/health/live`
+  - `http://localhost:3002/health/live`
 
 ## Quick Troubleshooting
 - If `Unexpected API error` appears while using new endpoints, make sure the backend is not stale and rebuild:
