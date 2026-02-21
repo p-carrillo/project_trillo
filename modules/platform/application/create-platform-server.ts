@@ -4,8 +4,14 @@ import { registerAuthRoutes, registerUserRoutes, parseBearerToken } from '../../
 import type { PlatformDependencies } from '../domain';
 import { registerHealthRoutes } from '../interfaces';
 
+export interface PlatformServerSecurityOptions {
+  registrationEnabled: boolean;
+  httpApiKey: string | null;
+}
+
 export async function createPlatformServer(
-  dependencies: PlatformDependencies
+  dependencies: PlatformDependencies,
+  security: PlatformServerSecurityOptions
 ): Promise<FastifyInstance> {
   const server = Fastify({
     logger: {
@@ -42,8 +48,33 @@ export async function createPlatformServer(
     }
   };
 
+  server.addHook('onRequest', async (request, reply) => {
+    if (!security.httpApiKey) {
+      return;
+    }
+
+    if (request.url.startsWith('/health/')) {
+      return;
+    }
+
+    const headerValue = request.headers['x-api-key'];
+    const apiKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    if (apiKey === security.httpApiKey) {
+      return;
+    }
+
+    reply.code(401).send({
+      error: {
+        code: 'invalid_api_key',
+        message: 'Missing or invalid API key.'
+      }
+    });
+  });
+
   await registerHealthRoutes(server, dependencies.isDatabaseReady);
-  await registerAuthRoutes(server, dependencies.authService);
+  await registerAuthRoutes(server, dependencies.authService, {
+    registrationEnabled: security.registrationEnabled
+  });
   await registerUserRoutes(server, dependencies.userService, resolveAuthenticatedActor);
   await registerProjectRoutes(server, dependencies.projectService, resolveAuthenticatedUserId);
   await registerTaskRoutes(server, dependencies.taskService, resolveAuthenticatedUserId);

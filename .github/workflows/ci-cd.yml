@@ -90,6 +90,8 @@ jobs:
               printf 'MCP_ACCESS_TOKEN=%s\n' '${{ secrets.MCP_ACCESS_TOKEN }}'
               printf 'JWT_ACCESS_SECRET=%s\n' '${{ secrets.JWT_ACCESS_SECRET }}'
               printf 'JWT_ACCESS_EXPIRES_IN=%s\n' '${{ secrets.JWT_ACCESS_EXPIRES_IN }}'
+              printf 'AUTH_REGISTER_ENABLED=%s\n' '${{ secrets.AUTH_REGISTER_ENABLED }}'
+              printf 'HTTP_API_KEY=%s\n' '${{ secrets.HTTP_API_KEY }}'
             } > "${{ secrets.DEPLOY_PATH }}/.env"
             chmod 600 "${{ secrets.DEPLOY_PATH }}/.env"
             for key in DB_ROOT_PASSWORD DB_NAME DB_USER DB_PASSWORD MCP_API_KEY JWT_ACCESS_SECRET; do

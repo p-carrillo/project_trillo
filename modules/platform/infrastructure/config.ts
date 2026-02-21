@@ -4,6 +4,10 @@ export interface PlatformConfig {
   auth: {
     jwtAccessSecret: string;
     jwtAccessExpiresInSeconds: number;
+    registrationEnabled: boolean;
+  };
+  security: {
+    httpApiKey: string | null;
   };
   database: {
     host: string;
@@ -26,6 +30,8 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
 
   const jwtAccessSecret = env.JWT_ACCESS_SECRET?.trim() || 'change-me-in-production';
   const jwtAccessExpiresInSeconds = parseNumericEnv(env.JWT_ACCESS_EXPIRES_IN, 60 * 60 * 24, 'JWT_ACCESS_EXPIRES_IN');
+  const registrationEnabled = parseBooleanEnv(env.AUTH_REGISTER_ENABLED, true);
+  const httpApiKey = env.HTTP_API_KEY?.trim() || null;
 
   if (!dbUser || !dbName) {
     throw new Error('DB_USER and DB_NAME are required.');
@@ -36,7 +42,11 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
     port,
     auth: {
       jwtAccessSecret,
-      jwtAccessExpiresInSeconds
+      jwtAccessExpiresInSeconds,
+      registrationEnabled
+    },
+    security: {
+      httpApiKey
     },
     database: {
       host: dbHost,
@@ -68,4 +78,21 @@ function parseNumericEnv(rawValue: string | undefined, fallback: number, variabl
   }
 
   return parsed;
+}
+
+function parseBooleanEnv(rawValue: string | undefined, fallback: boolean): boolean {
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+    return true;
+  }
+
+  if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+    return false;
+  }
+
+  throw new Error('Boolean environment variable must be one of: true/false, 1/0, yes/no.');
 }

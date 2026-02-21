@@ -14,6 +14,10 @@ import {
 import type { AuthService } from '../../application';
 import { parseBearerToken } from './auth-guard';
 
+interface AuthRouteOptions {
+  registrationEnabled: boolean;
+}
+
 interface ErrorBody {
   error: {
     code: string;
@@ -32,9 +36,26 @@ class ValidationError extends Error {
   }
 }
 
-export async function registerAuthRoutes(fastify: FastifyInstance, authService: AuthService): Promise<void> {
+class RegistrationDisabledError extends Error {
+  code = 'registration_disabled' as const;
+
+  constructor(message = 'User registration is disabled.') {
+    super(message);
+    this.name = 'RegistrationDisabledError';
+  }
+}
+
+export async function registerAuthRoutes(
+  fastify: FastifyInstance,
+  authService: AuthService,
+  options: AuthRouteOptions = { registrationEnabled: true }
+): Promise<void> {
   fastify.post('/api/v1/auth/register', async (request, reply) => {
     return handleRequest(reply, async () => {
+      if (!options.registrationEnabled) {
+        throw new RegistrationDisabledError();
+      }
+
       const body = parseRegisterBody(request.body);
       const session = await authService.register(body);
 
@@ -189,6 +210,18 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
           code: 'validation_error',
           message: error.message,
           details: error.details
+        }
+      }
+    };
+  }
+
+  if (error instanceof RegistrationDisabledError) {
+    return {
+      statusCode: 403,
+      body: {
+        error: {
+          code: error.code,
+          message: error.message
         }
       }
     };

@@ -6,8 +6,6 @@ services:
       MARIADB_DATABASE: trillo
       MARIADB_USER: trillo
       MARIADB_PASSWORD: trillo
-    ports:
-      - '3310:3306'
     volumes:
       - mariadb_data:/var/lib/mysql
     healthcheck:
@@ -33,6 +31,8 @@ services:
       MCP_ACCESS_TOKEN: ''
       JWT_ACCESS_SECRET: change-me-in-production
       JWT_ACCESS_EXPIRES_IN: 86400
+      AUTH_REGISTER_ENABLED: 'true'
+      HTTP_API_KEY: ''
       LOG_LEVEL: info
     depends_on:
       mariadb:

@@ -31,6 +31,8 @@ services:
       MCP_ACCESS_TOKEN: ${MCP_ACCESS_TOKEN:-}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
       JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-86400}
+      AUTH_REGISTER_ENABLED: ${AUTH_REGISTER_ENABLED:-false}
+      HTTP_API_KEY: ${HTTP_API_KEY:-}
       LOG_LEVEL: info
     depends_on:
       mariadb:

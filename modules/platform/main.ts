@@ -41,6 +41,9 @@ async function start(): Promise<void> {
     authService,
     userService,
     isDatabaseReady: () => checkDatabaseReadiness(pool)
+  }, {
+    registrationEnabled: config.auth.registrationEnabled,
+    httpApiKey: config.security.httpApiKey
   });
 
   const close = async () => {

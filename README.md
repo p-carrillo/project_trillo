@@ -64,7 +64,12 @@ docker compose -f docker/compose.dev.yml up --build
 Services:
 - Frontend: `http://localhost:8080`
 - Backend: `http://localhost:3000`
-- MariaDB: `localhost:3306`
+- MariaDB: internal Docker network only (not exposed to host)
+
+Inspect MariaDB from Docker network:
+```bash
+docker compose -f docker/compose.dev.yml exec -T mariadb mariadb -uroot -proot -e "SHOW DATABASES;"
+```
 
 ## Frontend Development With Hot Reload (Watch)
 For immediate UI changes (Vite + HMR inside Docker):
@@ -116,6 +121,8 @@ Required deploy secrets:
 Optional deploy secrets:
 - `MCP_ACCESS_TOKEN`
 - `JWT_ACCESS_EXPIRES_IN` (defaults to `86400`)
+- `AUTH_REGISTER_ENABLED` (defaults to `false` in production compose)
+- `HTTP_API_KEY` (when set, all HTTP endpoints except `/health/*` require `x-api-key`)
 
 Remote deployment:
 - Syncs code to the host via `rsync`.
