@@ -9,7 +9,7 @@ services:
     volumes:
       - mariadb_data:/var/lib/mysql
     healthcheck:
-      test: ['CMD-SHELL', 'mariadb -h 127.0.0.1 -uroot -proot -e "SELECT 1" >/dev/null 2>&1']
+      test: ['CMD-SHELL', 'mariadb -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD -e "SELECT 1" >/dev/null 2>&1']
       interval: 5s
       timeout: 5s
       retries: 15
