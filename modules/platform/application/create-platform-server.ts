@@ -11,7 +11,10 @@ export interface PlatformServerSecurityOptions {
 
 export async function createPlatformServer(
   dependencies: PlatformDependencies,
-  security: PlatformServerSecurityOptions
+  security: PlatformServerSecurityOptions = {
+    registrationEnabled: true,
+    httpApiKey: null
+  }
 ): Promise<FastifyInstance> {
   const server = Fastify({
     logger: {
