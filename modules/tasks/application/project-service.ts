@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  InvalidProjectOrderError,
   normalizeProjectDescription,
   normalizeProjectName,
   ProjectNameTakenError,
@@ -39,6 +40,7 @@ export class ProjectService {
       throw new ProjectNameTakenError(name);
     }
 
+    const currentProjects = await this.repository.listByOwner(userId);
     const createdAt = this.now();
 
     return this.repository.create({
@@ -46,6 +48,7 @@ export class ProjectService {
       ownerUserId: userId,
       name,
       description,
+      sortOrder: currentProjects.length,
       createdAt,
       updatedAt: createdAt
     });
@@ -94,5 +97,30 @@ export class ProjectService {
 
     await this.taskRepository.deleteByBoard(projectId, userId);
     await this.repository.delete(projectId, userId);
+  }
+
+  async reorderProjects(userId: string, projectIds: string[]): Promise<Project[]> {
+    const currentProjects = await this.repository.listByOwner(userId);
+
+    if (projectIds.length !== currentProjects.length) {
+      throw new InvalidProjectOrderError('projectIds must include all projects owned by the authenticated user.');
+    }
+
+    const uniqueProjectIds = new Set(projectIds);
+    if (uniqueProjectIds.size !== projectIds.length) {
+      throw new InvalidProjectOrderError('projectIds must not contain duplicated values.');
+    }
+
+    const currentProjectIds = new Set(currentProjects.map((project) => project.id));
+
+    for (const projectId of projectIds) {
+      if (!currentProjectIds.has(projectId)) {
+        throw new ProjectNotFoundError(projectId);
+      }
+    }
+
+    await this.repository.reorderByOwner(userId, projectIds, this.now());
+
+    return this.repository.listByOwner(userId);
   }
 }

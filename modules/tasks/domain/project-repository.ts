@@ -6,5 +6,6 @@ export interface ProjectRepository {
   findByName(name: string, userId: string): Promise<Project | null>;
   create(project: NewProject): Promise<Project>;
   update(projectId: string, userId: string, patch: ProjectPatch, updatedAt: Date): Promise<Project>;
+  reorderByOwner(userId: string, orderedProjectIds: string[], updatedAt: Date): Promise<void>;
   delete(projectId: string, userId: string): Promise<void>;
 }

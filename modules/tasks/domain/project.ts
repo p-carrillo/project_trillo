@@ -5,6 +5,7 @@ export interface Project {
   ownerUserId: string;
   name: string;
   description: string | null;
+  sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -14,6 +15,7 @@ export interface NewProject {
   ownerUserId: string;
   name: string;
   description: string | null;
+  sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 }

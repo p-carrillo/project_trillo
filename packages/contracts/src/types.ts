@@ -83,8 +83,19 @@ export interface UpdateProjectRequest {
   description?: string | null;
 }
 
+export interface ReorderProjectsRequest {
+  projectIds: ProjectId[];
+}
+
 export interface ProjectResponse {
   data: ProjectDto;
+}
+
+export interface ReorderProjectsResponse {
+  data: ProjectDto[];
+  meta: {
+    total: number;
+  };
 }
 
 export interface TaskDto {

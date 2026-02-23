@@ -13,9 +13,14 @@ import {
   deleteProject as deleteProjectRecord,
   fetchProjects,
   isProjectApiError,
+  reorderProjects as reorderProjectsRecord,
   updateProject as updateProjectRecord
 } from '../api/project-api';
 import { buildTaskBoardColumns } from '../board/board-model';
+import {
+  reorderColumnOrder,
+  resolveColumnOrder
+} from '../board/column-order';
 import { AppShell } from './app-shell';
 import { AppSidebar } from './app-sidebar';
 import { BoardHeader } from './board-header';
@@ -28,6 +33,7 @@ import { EpicTabs } from './epic-tabs';
 const ACTIVE_PROJECT_STORAGE_KEY = 'trillo.active-project.v1';
 const CUSTOM_COLUMNS_STORAGE_KEY_PREFIX = 'trillo.custom-columns.v2.';
 const COLUMN_LABELS_STORAGE_KEY_PREFIX = 'trillo.column-label-overrides.v1.';
+const COLUMN_ORDER_STORAGE_KEY_PREFIX = 'trillo.column-order.v1.';
 const MAX_CUSTOM_COLUMNS = 8;
 
 interface CustomColumn {
@@ -78,6 +84,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     description: ''
   });
   const [columnLabelOverrides, setColumnLabelOverrides] = useState<ColumnLabelOverrides>({});
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
@@ -128,6 +135,15 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       })),
     [columnLabelOverrides, columns]
   );
+  const resolvedColumnOrder = useMemo(
+    () =>
+      resolveColumnOrder(
+        columnOrder,
+        displayColumns.map((column) => column.status),
+        customColumns.map((column) => column.id)
+      ),
+    [columnOrder, customColumns, displayColumns]
+  );
   const selectableEpics = useMemo(
     () => epics.filter((epic) => epic.id !== editingTaskId),
     [editingTaskId, epics]
@@ -155,11 +171,13 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     if (!selectedProjectId) {
       setCustomColumns([]);
       setColumnLabelOverrides({});
+      setColumnOrder([]);
       return;
     }
 
     setCustomColumns(loadCustomColumns(selectedProjectId));
     setColumnLabelOverrides(loadColumnLabelOverrides(selectedProjectId));
+    setColumnOrder(loadColumnOrder(selectedProjectId));
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -186,6 +204,19 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     saveColumnLabelOverrides(selectedProjectId, columnLabelOverrides);
   }, [columnLabelOverrides, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    if (!isStringArrayEqual(columnOrder, resolvedColumnOrder)) {
+      setColumnOrder(resolvedColumnOrder);
+      return;
+    }
+
+    saveColumnOrder(selectedProjectId, resolvedColumnOrder);
+  }, [columnOrder, resolvedColumnOrder, selectedProjectId]);
 
   useEffect(() => {
     function handleEscape(event: KeyboardEvent) {
@@ -295,6 +326,29 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       throw error;
     } finally {
       setIsCreatingProject(false);
+    }
+  }
+
+  async function handleReorderProject(sourceProjectId: string, targetProjectId: string) {
+    if (sourceProjectId === targetProjectId) {
+      return;
+    }
+
+    const previousProjects = projects;
+    const nextProjects = reorderProjectList(previousProjects, sourceProjectId, targetProjectId);
+    if (nextProjects === previousProjects) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setProjects(nextProjects);
+
+    try {
+      const orderedProjects = await reorderProjectsRecord(nextProjects.map((project) => project.id));
+      setProjects(orderedProjects);
+    } catch (error) {
+      setProjects(previousProjects);
+      handleUiError(error);
     }
   }
 
@@ -664,6 +718,18 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setCustomColumns((current) => current.filter((item) => item.id !== columnId));
   }
 
+  function handleReorderColumns(sourceColumnId: string, targetColumnId: string) {
+    setColumnOrder((current) => {
+      const normalized = resolveColumnOrder(
+        current,
+        displayColumns.map((column) => column.status),
+        customColumns.map((column) => column.id)
+      );
+
+      return reorderColumnOrder(normalized, sourceColumnId, targetColumnId);
+    });
+  }
+
   function handleRenameColumn(status: TaskStatus, label: string) {
     const normalizedLabel = normalizeColumnLabel(label);
     if (!normalizedLabel) {
@@ -718,6 +784,9 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
           onClose={() => setIsSidebarOpen(false)}
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
+          onReorderProject={(sourceProjectId, targetProjectId) => {
+            void handleReorderProject(sourceProjectId, targetProjectId);
+          }}
           onOpenProjectPanel={handleOpenProjectPanel}
           onOpenProfilePanel={onOpenProfilePanel}
         />
@@ -742,11 +811,13 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
               <TaskBoard
                 columns={displayColumns}
                 customColumns={customColumns}
+                columnOrder={resolvedColumnOrder}
                 isLoading={isLoadingProjects || isLoadingTasks}
                 onMoveTaskToStatus={handleMoveTaskToStatus}
                 onEditTask={handleEditTask}
                 onRenameColumn={handleRenameColumn}
                 onRenameCustomColumn={handleRenameCustomColumn}
+                onReorderColumns={handleReorderColumns}
                 onOpenCreateTask={handleOpenCreatePanel}
                 onAddCustomColumn={handleAddCustomColumn}
                 onRemoveCustomColumn={handleRemoveCustomColumn}
@@ -889,12 +960,51 @@ function resolveSelectedProjectId(projects: ProjectDto[], preferredProjectId: st
   return projects[0]?.id ?? null;
 }
 
+function reorderProjectList(projects: ProjectDto[], sourceProjectId: string, targetProjectId: string): ProjectDto[] {
+  if (sourceProjectId === targetProjectId) {
+    return projects;
+  }
+
+  const sourceIndex = projects.findIndex((project) => project.id === sourceProjectId);
+  const targetIndex = projects.findIndex((project) => project.id === targetProjectId);
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return projects;
+  }
+
+  const nextProjects = [...projects];
+  const [removed] = nextProjects.splice(sourceIndex, 1);
+  if (!removed) {
+    return projects;
+  }
+
+  nextProjects.splice(Math.min(targetIndex, nextProjects.length), 0, removed);
+  return nextProjects;
+}
+
+function isStringArrayEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function createCustomColumnsStorageKey(projectId: string): string {
   return `${CUSTOM_COLUMNS_STORAGE_KEY_PREFIX}${projectId}`;
 }
 
 function createColumnLabelsStorageKey(projectId: string): string {
   return `${COLUMN_LABELS_STORAGE_KEY_PREFIX}${projectId}`;
+}
+
+function createColumnOrderStorageKey(projectId: string): string {
+  return `${COLUMN_ORDER_STORAGE_KEY_PREFIX}${projectId}`;
 }
 
 function clearProjectViewState(projectId: string) {
@@ -905,6 +1015,7 @@ function clearProjectViewState(projectId: string) {
   try {
     window.localStorage.removeItem(createCustomColumnsStorageKey(projectId));
     window.localStorage.removeItem(createColumnLabelsStorageKey(projectId));
+    window.localStorage.removeItem(createColumnOrderStorageKey(projectId));
   } catch {
     // Ignore storage failures to keep UI usable.
   }
@@ -999,6 +1110,40 @@ function saveColumnLabelOverrides(projectId: string, overrides: ColumnLabelOverr
 
   try {
     window.localStorage.setItem(createColumnLabelsStorageKey(projectId), JSON.stringify(overrides));
+  } catch {
+    // Ignore storage failures to keep UI usable.
+  }
+}
+
+function loadColumnOrder(projectId: string): string[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(createColumnOrderStorageKey(projectId));
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function saveColumnOrder(projectId: string, columnOrder: string[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(createColumnOrderStorageKey(projectId), JSON.stringify(columnOrder));
   } catch {
     // Ignore storage failures to keep UI usable.
   }

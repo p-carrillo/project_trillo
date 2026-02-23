@@ -3,6 +3,8 @@ import type {
   ListProjectsResponse,
   ProjectDto,
   ProjectResponse,
+  ReorderProjectsRequest,
+  ReorderProjectsResponse,
   UpdateProjectRequest
 } from '@trillo/contracts';
 import { isApiRequestError, requestJson } from '../../shared/api/api-request';
@@ -33,6 +35,19 @@ export async function updateProject(projectId: string, input: UpdateProjectReque
   const response = await requestJson<ProjectResponse>(`${BASE_PATH}/projects/${encodeURIComponent(projectId)}`, {
     method: 'PATCH',
     body: JSON.stringify(input)
+  });
+
+  return response.data;
+}
+
+export async function reorderProjects(projectIds: string[]): Promise<ProjectDto[]> {
+  const payload: ReorderProjectsRequest = {
+    projectIds
+  };
+
+  const response = await requestJson<ReorderProjectsResponse>(`${BASE_PATH}/projects/reorder`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
   });
 
   return response.data;

@@ -16,10 +16,12 @@ export async function runTaskMigrations(pool: Pool, defaultOwnerUserId: string):
       owner_user_id CHAR(36) NOT NULL,
       name VARCHAR(120) NOT NULL,
       description TEXT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
       created_at DATETIME(3) NOT NULL,
       updated_at DATETIME(3) NOT NULL,
       UNIQUE KEY uk_projects_owner_name (owner_user_id, name),
-      INDEX idx_projects_owner_user_id (owner_user_id)
+      INDEX idx_projects_owner_user_id (owner_user_id),
+      INDEX idx_projects_owner_sort_order (owner_user_id, sort_order)
     )
   `);
 
@@ -37,6 +39,14 @@ export async function runTaskMigrations(pool: Pool, defaultOwnerUserId: string):
     `);
   }
 
+  const sortOrderColumnWasMissing = !(await hasTableColumn(pool, 'projects', 'sort_order'));
+  if (sortOrderColumnWasMissing) {
+    await pool.query(`
+      ALTER TABLE projects
+      ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER description
+    `);
+  }
+
   await pool.query(
     `
     UPDATE projects
@@ -45,6 +55,19 @@ export async function runTaskMigrations(pool: Pool, defaultOwnerUserId: string):
     `,
     [defaultOwnerUserId]
   );
+
+  if (sortOrderColumnWasMissing) {
+    await pool.query(`
+      UPDATE projects target
+      INNER JOIN (
+        SELECT
+          p.id,
+          ROW_NUMBER() OVER (PARTITION BY p.owner_user_id ORDER BY p.created_at ASC, p.id ASC) - 1 AS sort_order
+        FROM projects p
+      ) ordered ON ordered.id = target.id
+      SET target.sort_order = ordered.sort_order
+    `);
+  }
 
   if (await hasIndex(pool, 'projects', 'uk_projects_name')) {
     await pool.query(`
@@ -63,6 +86,13 @@ export async function runTaskMigrations(pool: Pool, defaultOwnerUserId: string):
     await pool.query(`
       CREATE INDEX idx_projects_owner_user_id
       ON projects (owner_user_id)
+    `);
+  }
+
+  if (!(await hasIndex(pool, 'projects', 'idx_projects_owner_sort_order'))) {
+    await pool.query(`
+      CREATE INDEX idx_projects_owner_sort_order
+      ON projects (owner_user_id, sort_order)
     `);
   }
 

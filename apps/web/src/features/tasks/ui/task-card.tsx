@@ -6,6 +6,7 @@ interface TaskCardProps {
   onStartDragging: (taskId: string) => void;
   onEndDragging: () => void;
   isDragging: boolean;
+  isDragDisabled?: boolean;
 }
 
 export function TaskCard({
@@ -13,15 +14,21 @@ export function TaskCard({
   onEditTask,
   onStartDragging,
   onEndDragging,
-  isDragging
+  isDragging,
+  isDragDisabled = false
 }: TaskCardProps) {
   const taskType = task.taskType ?? 'task';
 
   return (
     <article
       className={`task-card ${isDragging ? 'task-card--dragging' : ''}`}
-      draggable
+      draggable={!isDragDisabled}
       onDragStart={(event) => {
+        if (isDragDisabled) {
+          event.preventDefault();
+          return;
+        }
+
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = 'move';
           event.dataTransfer.setData('text/task-id', task.id);

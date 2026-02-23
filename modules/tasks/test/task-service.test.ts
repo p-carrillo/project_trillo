@@ -254,6 +254,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Project Alpha',
     description: null,
+    sortOrder: 0,
     createdAt: now,
     updatedAt: now
   });
@@ -263,6 +264,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Board A',
     description: null,
+    sortOrder: 1,
     createdAt: now,
     updatedAt: now
   });
@@ -272,6 +274,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Board B',
     description: null,
+    sortOrder: 2,
     createdAt: now,
     updatedAt: now
   });
@@ -281,6 +284,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_BETA,
     name: 'Beta Board',
     description: null,
+    sortOrder: 0,
     createdAt: now,
     updatedAt: now
   });

@@ -84,6 +84,114 @@ describe('Task API contract with tenancy', () => {
     await server.close();
   });
 
+  it('returns 400 for invalid reorder payload', async () => {
+    const { server, userAlpha } = await createTestServer();
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/projects/reorder',
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        projectIds: ['valid-id', 10]
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'validation_error',
+        message: 'Invalid request payload.',
+        details: {
+          projectIds: 'projectIds must contain non-empty strings.'
+        }
+      }
+    });
+
+    await server.close();
+  });
+
+  it('returns 401 for reorder projects endpoint without token', async () => {
+    const { server } = await createTestServer();
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/projects/reorder',
+      payload: {
+        projectIds: []
+      }
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'unauthorized',
+        message: 'Missing or invalid authentication token.'
+      }
+    });
+
+    await server.close();
+  });
+
+  it('reorders only authenticated user projects', async () => {
+    const { server, projectService, userAlpha, userBeta } = await createTestServer();
+
+    const alphaProject = await projectService.createProject(userAlpha.user.id, { name: 'Alpha Project' });
+    const betaProject = await projectService.createProject(userAlpha.user.id, { name: 'Beta Project' });
+    await projectService.createProject(userBeta.user.id, { name: 'Foreign Project' });
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/projects/reorder',
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        projectIds: [betaProject.id, alphaProject.id]
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: [{ id: betaProject.id }, { id: alphaProject.id }],
+      meta: {
+        total: 2
+      }
+    });
+
+    await server.close();
+  });
+
+  it('returns 404 when reorder payload includes foreign project id', async () => {
+    const { server, projectService, userAlpha, userBeta } = await createTestServer();
+
+    const alphaProject = await projectService.createProject(userAlpha.user.id, { name: 'Alpha Project' });
+    await projectService.createProject(userAlpha.user.id, { name: 'Beta Project' });
+    const foreignProject = await projectService.createProject(userBeta.user.id, { name: 'Foreign Project' });
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: '/api/v1/projects/reorder',
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        projectIds: [foreignProject.id, alphaProject.id]
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'project_not_found',
+        message: `Project ${foreignProject.id} was not found.`
+      }
+    });
+
+    await server.close();
+  });
+
   it('returns tasks list for owned board', async () => {
     const { server, projectService, taskService, userAlpha } = await createTestServer();
 
