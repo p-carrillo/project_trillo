@@ -13,6 +13,12 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   done: 'Done'
 };
 
+const PRIORITY_RANK: Record<TaskDto['priority'], number> = {
+  high: 0,
+  medium: 1,
+  low: 2
+};
+
 export function buildTaskBoardColumns(
   tasks: TaskDto[],
   searchText: string,
@@ -37,7 +43,7 @@ export function buildTaskBoardColumns(
     : filteredByEpic;
 
   return taskStatuses.map((status) => {
-    const statusTasks = orderTasksByEpicFirst(filtered.filter((task) => task.status === status));
+    const statusTasks = orderTasksByImportance(filtered.filter((task) => task.status === status));
 
     return {
       status,
@@ -48,20 +54,17 @@ export function buildTaskBoardColumns(
   });
 }
 
-function orderTasksByEpicFirst(tasks: TaskDto[]): TaskDto[] {
-  const epicTasks: TaskDto[] = [];
-  const regularTasks: TaskDto[] = [];
+function orderTasksByImportance(tasks: TaskDto[]): TaskDto[] {
+  return [...tasks].sort((left, right) => {
+    const leftTypeRank = (left.taskType ?? 'task') === 'epic' ? 0 : 1;
+    const rightTypeRank = (right.taskType ?? 'task') === 'epic' ? 0 : 1;
 
-  for (const task of tasks) {
-    if ((task.taskType ?? 'task') === 'epic') {
-      epicTasks.push(task);
-      continue;
+    if (leftTypeRank !== rightTypeRank) {
+      return leftTypeRank - rightTypeRank;
     }
 
-    regularTasks.push(task);
-  }
-
-  return [...epicTasks, ...regularTasks];
+    return PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
+  });
 }
 
 export function getNextStatus(status: TaskStatus): TaskStatus | null {

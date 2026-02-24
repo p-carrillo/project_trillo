@@ -53,7 +53,7 @@ describe('buildTaskBoardColumns', () => {
     expect(columns[2]?.count).toBe(0);
   });
 
-  it('keeps epic tasks at the top within each status column', () => {
+  it('keeps epic tasks first and then orders by priority within each status column', () => {
     const unorderedTasks = [
       {
         id: 'task-1',
@@ -61,7 +61,7 @@ describe('buildTaskBoardColumns', () => {
         title: 'Refine billing copy',
         description: null,
         category: 'Marketing',
-        priority: 'medium' as const,
+        priority: 'low' as const,
         status: 'todo' as const,
         taskType: 'task' as const,
         epicId: null,
@@ -74,7 +74,7 @@ describe('buildTaskBoardColumns', () => {
         title: 'Improve onboarding flow',
         description: null,
         category: 'Product',
-        priority: 'high' as const,
+        priority: 'medium' as const,
         status: 'todo' as const,
         taskType: 'epic' as const,
         epicId: null,
@@ -98,7 +98,7 @@ describe('buildTaskBoardColumns', () => {
 
     const columns = buildTaskBoardColumns(unorderedTasks, '');
 
-    expect(columns[0]?.tasks.map((task) => task.id)).toEqual(['epic-2', 'task-1', 'task-2']);
+    expect(columns[0]?.tasks.map((task) => task.id)).toEqual(['epic-2', 'task-2', 'task-1']);
   });
 
   it('filters tasks by search text', () => {

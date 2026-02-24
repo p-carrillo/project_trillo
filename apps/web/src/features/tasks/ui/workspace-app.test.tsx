@@ -47,7 +47,13 @@ describe('WorkspaceApp epic linked tasks', () => {
       <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open task settings for Epic Alpha' }));
+    const taskSettingsButtons = await screen.findAllByRole('button', { name: /Open task settings for /i }, { timeout: 5000 });
+    const epicSettingsButton = taskSettingsButtons.find(
+      (button) => button.getAttribute('aria-label') === 'Open task settings for Epic Alpha'
+    );
+    expect(epicSettingsButton).toBeDefined();
+
+    fireEvent.click(epicSettingsButton as HTMLButtonElement);
     expect(await screen.findByText('Linked Tasks')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Unlink task Child task linked to epic' })).toBeInTheDocument();
 
