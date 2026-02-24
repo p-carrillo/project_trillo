@@ -27,6 +27,17 @@ describe('ProjectService', () => {
     expect(project.name).toBe('Product Roadmap');
     expect(project.description).toBeNull();
     expect(project.ownerUserId).toBe(USER_ALPHA);
+    expect(project.sortOrder).toBe(0);
+  });
+
+  it('assigns incremental sortOrder when creating projects', async () => {
+    const { service } = createProjectService();
+
+    const first = await service.createProject(USER_ALPHA, { name: 'Project Alpha' });
+    const second = await service.createProject(USER_ALPHA, { name: 'Project Beta' });
+
+    expect(first.sortOrder).toBe(0);
+    expect(second.sortOrder).toBe(1);
   });
 
   it('normalizes project description when creating project', async () => {
@@ -130,6 +141,63 @@ describe('ProjectService', () => {
     await expect(service.updateProject(USER_BETA, projectAlpha.id, { name: 'Project Beta' })).rejects.toMatchObject({
       code: 'project_not_found'
     });
+  });
+
+  it('reorders projects for the same owner', async () => {
+    const { service } = createProjectService();
+
+    const alpha = await service.createProject(USER_ALPHA, { name: 'Project Alpha' });
+    const beta = await service.createProject(USER_ALPHA, { name: 'Project Beta' });
+    const gamma = await service.createProject(USER_ALPHA, { name: 'Project Gamma' });
+
+    const reordered = await service.reorderProjects(USER_ALPHA, [gamma.id, alpha.id, beta.id]);
+
+    expect(reordered.map((project) => project.id)).toEqual([gamma.id, alpha.id, beta.id]);
+    expect(reordered.map((project) => project.sortOrder)).toEqual([0, 1, 2]);
+  });
+
+  it('rejects project reorder with duplicated ids', async () => {
+    const { service } = createProjectService();
+
+    const alpha = await service.createProject(USER_ALPHA, { name: 'Project Alpha' });
+    const beta = await service.createProject(USER_ALPHA, { name: 'Project Beta' });
+
+    await expect(service.reorderProjects(USER_ALPHA, [alpha.id, alpha.id])).rejects.toMatchObject({
+      code: 'invalid_project_order'
+    });
+
+    await expect(service.listProjects(USER_ALPHA)).resolves.toMatchObject([
+      { id: alpha.id, sortOrder: 0 },
+      { id: beta.id, sortOrder: 1 }
+    ]);
+  });
+
+  it('rejects project reorder when payload misses existing ids', async () => {
+    const { service } = createProjectService();
+
+    const alpha = await service.createProject(USER_ALPHA, { name: 'Project Alpha' });
+    await service.createProject(USER_ALPHA, { name: 'Project Beta' });
+
+    await expect(service.reorderProjects(USER_ALPHA, [alpha.id])).rejects.toMatchObject({
+      code: 'invalid_project_order'
+    });
+  });
+
+  it('rejects project reorder when payload includes foreign ids', async () => {
+    const { service } = createProjectService();
+
+    const alpha = await service.createProject(USER_ALPHA, { name: 'Project Alpha' });
+    const beta = await service.createProject(USER_ALPHA, { name: 'Project Beta' });
+    const foreign = await service.createProject(USER_BETA, { name: 'Foreign Project' });
+
+    await expect(service.reorderProjects(USER_ALPHA, [beta.id, foreign.id])).rejects.toMatchObject({
+      code: 'project_not_found'
+    });
+
+    await expect(service.listProjects(USER_ALPHA)).resolves.toMatchObject([
+      { id: alpha.id, sortOrder: 0 },
+      { id: beta.id, sortOrder: 1 }
+    ]);
   });
 });
 

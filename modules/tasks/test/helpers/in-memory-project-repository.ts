@@ -17,7 +17,10 @@ export class InMemoryProjectRepository implements ProjectRepository {
   async listByOwner(userId: string): Promise<Project[]> {
     return Array.from(this.projects.values())
       .filter((project) => project.ownerUserId === userId)
-      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+      .sort(
+        (left, right) =>
+          left.sortOrder - right.sortOrder || left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id)
+      );
   }
 
   async findById(projectId: string, userId: string): Promise<Project | null> {
@@ -71,6 +74,25 @@ export class InMemoryProjectRepository implements ProjectRepository {
 
     this.projects.set(projectId, updated);
     return updated;
+  }
+
+  async reorderByOwner(userId: string, orderedProjectIds: string[], updatedAt: Date): Promise<void> {
+    const projects = await this.listByOwner(userId);
+    const byId = new Map(projects.map((project) => [project.id, project] as const));
+
+    for (let index = 0; index < orderedProjectIds.length; index += 1) {
+      const projectId = orderedProjectIds[index];
+      const current = byId.get(projectId);
+      if (!current) {
+        throw new ProjectNotFoundError(projectId);
+      }
+
+      this.projects.set(projectId, {
+        ...current,
+        sortOrder: index,
+        updatedAt
+      });
+    }
   }
 
   async delete(projectId: string, userId: string): Promise<void> {

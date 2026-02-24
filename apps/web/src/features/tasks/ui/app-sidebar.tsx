@@ -15,6 +15,7 @@ interface AppSidebarProps {
   onClose: () => void;
   onSelectProject: (projectId: string) => void;
   onCreateProject: (name: string) => Promise<void>;
+  onReorderProject: (sourceProjectId: string, targetProjectId: string) => void;
   onOpenProjectPanel: (projectId: string) => void;
   onOpenProfilePanel: () => void;
 }
@@ -29,12 +30,15 @@ export function AppSidebar({
   onClose,
   onSelectProject,
   onCreateProject,
+  onReorderProject,
   onOpenProjectPanel,
   onOpenProfilePanel
 }: AppSidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
+  const [projectDropTargetId, setProjectDropTargetId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -129,32 +133,67 @@ export function AppSidebar({
             <p className="projects-empty">No projects yet.</p>
           ) : (
             projects.map((project) => (
-              <div key={project.id} className={`project-item ${selectedProjectId === project.id ? 'project-item--active' : ''}`}>
+              <div
+                key={project.id}
+                className={`project-item ${selectedProjectId === project.id ? 'project-item--active' : ''} ${draggingProjectId === project.id ? 'project-item--dragging' : ''} ${projectDropTargetId === project.id ? 'project-item--drop-target' : ''}`}
+                onDragOver={(event) => {
+                  if (!draggingProjectId) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  setProjectDropTargetId(project.id);
+                }}
+                onDrop={(event) => {
+                  if (!draggingProjectId) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  onReorderProject(draggingProjectId, project.id);
+                  setDraggingProjectId(null);
+                  setProjectDropTargetId(null);
+                }}
+              >
                 <button
                   type="button"
                   className={`menu-item ${selectedProjectId === project.id ? 'menu-item--active' : ''}`}
                   onClick={() => onSelectProject(project.id)}
+                  draggable
+                  onDragStart={(event) => {
+                    if (event.dataTransfer) {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/project-id', project.id);
+                    }
+                    setDraggingProjectId(project.id);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingProjectId(null);
+                    setProjectDropTargetId(null);
+                  }}
                   aria-label={`Select project ${project.name}`}
                 >
                   {project.name}
                 </button>
-                <button
-                  type="button"
-                  className="project-options-btn"
-                  onClick={() => onOpenProjectPanel(project.id)}
-                  disabled={isDeletingProjectId === project.id}
-                  aria-label={`Open project options ${project.name}`}
-                >
-                  {isDeletingProjectId === project.id ? (
-                    '...'
-                  ) : (
-                    <span className="project-options-icon" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  )}
-                </button>
+                <div className="project-item-actions">
+                  <button
+                    type="button"
+                    className="project-options-btn"
+                    onClick={() => onOpenProjectPanel(project.id)}
+                    disabled={isDeletingProjectId === project.id}
+                    aria-label={`Open project options ${project.name}`}
+                  >
+                    {isDeletingProjectId === project.id ? (
+                      '...'
+                    ) : (
+                      <span className="project-options-icon" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             ))
           )}

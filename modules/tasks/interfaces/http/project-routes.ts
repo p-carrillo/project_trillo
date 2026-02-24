@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  InvalidProjectOrderError,
   InvalidProjectDescriptionError,
   InvalidProjectNameError,
   ProjectNameTakenError,
@@ -66,6 +67,28 @@ export async function registerProjectRoutes(
         statusCode: 201,
         payload: {
           data: toProjectDto(project)
+        }
+      };
+    });
+  });
+
+  fastify.patch('/api/v1/projects/reorder', async (request, reply) => {
+    return handleRequest(reply, async () => {
+      const userId = await resolveAuthenticatedUser(request);
+      if (!userId) {
+        return unauthorizedResponse();
+      }
+
+      const body = parseReorderProjectsBody(request.body);
+      const projects = await projectService.reorderProjects(userId, body.projectIds);
+
+      return {
+        statusCode: 200,
+        payload: {
+          data: projects.map(toProjectDto),
+          meta: {
+            total: projects.length
+          }
         }
       };
     });
@@ -189,6 +212,27 @@ function parseUpdateProjectBody(body: FastifyRequest['body']): UpdateProjectInpu
   return payload;
 }
 
+function parseReorderProjectsBody(body: FastifyRequest['body']): { projectIds: string[] } {
+  const input = parseRecordBody(body);
+  const projectIds = input.projectIds;
+
+  if (!Array.isArray(projectIds)) {
+    throw new ValidationError({ projectIds: 'projectIds must be an array of project ids.' });
+  }
+
+  const normalizedProjectIds = projectIds.map((value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new ValidationError({ projectIds: 'projectIds must contain non-empty strings.' });
+    }
+
+    return value.trim();
+  });
+
+  return {
+    projectIds: normalizedProjectIds
+  };
+}
+
 function toProjectDto(project: Project) {
   return {
     id: project.id,
@@ -232,6 +276,18 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
   }
 
   if (error instanceof InvalidProjectNameError || error instanceof InvalidProjectDescriptionError) {
+    return {
+      statusCode: 400,
+      body: {
+        error: {
+          code: error.code,
+          message: error.message
+        }
+      }
+    };
+  }
+
+  if (error instanceof InvalidProjectOrderError) {
     return {
       statusCode: 400,
       body: {

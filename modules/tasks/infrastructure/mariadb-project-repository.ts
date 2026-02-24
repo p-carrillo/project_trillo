@@ -13,6 +13,7 @@ interface ProjectRow extends RowDataPacket {
   owner_user_id: string;
   name: string;
   description: string | null;
+  sort_order: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -23,10 +24,10 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async listByOwner(userId: string): Promise<Project[]> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, owner_user_id, name, description, created_at, updated_at
+      SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
       FROM projects
       WHERE owner_user_id = ?
-      ORDER BY created_at ASC
+      ORDER BY sort_order ASC, created_at ASC, id ASC
       `,
       [userId]
     );
@@ -37,7 +38,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findById(projectId: string, userId: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, owner_user_id, name, description, created_at, updated_at
+      SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
       FROM projects
       WHERE id = ? AND owner_user_id = ?
       LIMIT 1
@@ -53,7 +54,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findByName(name: string, userId: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, owner_user_id, name, description, created_at, updated_at
+      SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
       FROM projects
       WHERE name = ? AND owner_user_id = ?
       LIMIT 1
@@ -70,10 +71,18 @@ export class MariaDbProjectRepository implements ProjectRepository {
     try {
       await this.pool.query<ResultSetHeader>(
         `
-        INSERT INTO projects (id, owner_user_id, name, description, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, owner_user_id, name, description, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-        [project.id, project.ownerUserId, project.name, project.description, project.createdAt, project.updatedAt]
+        [
+          project.id,
+          project.ownerUserId,
+          project.name,
+          project.description,
+          project.sortOrder,
+          project.createdAt,
+          project.updatedAt
+        ]
       );
     } catch (error) {
       if (isDuplicateEntryError(error)) {
@@ -123,6 +132,36 @@ export class MariaDbProjectRepository implements ProjectRepository {
     return updated;
   }
 
+  async reorderByOwner(userId: string, orderedProjectIds: string[], updatedAt: Date): Promise<void> {
+    const connection = await this.pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      for (const [index, projectId] of orderedProjectIds.entries()) {
+        const [result] = await connection.query<ResultSetHeader>(
+          `
+          UPDATE projects
+          SET sort_order = ?, updated_at = ?
+          WHERE id = ? AND owner_user_id = ?
+          `,
+          [index, updatedAt, projectId, userId]
+        );
+
+        if (result.affectedRows === 0) {
+          throw new ProjectNotFoundError(projectId);
+        }
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   async delete(projectId: string, userId: string): Promise<void> {
     const [result] = await this.pool.query<ResultSetHeader>(
       `
@@ -143,6 +182,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
       ownerUserId: row.owner_user_id,
       name: row.name,
       description: row.description,
+      sortOrder: row.sort_order,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at)
     };

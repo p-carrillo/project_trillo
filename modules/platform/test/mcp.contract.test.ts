@@ -88,6 +88,7 @@ async function createToolset() {
     ownerUserId: actorUserId,
     name: 'Project Alpha',
     description: 'Primary board for product planning and delivery.',
+    sortOrder: 0,
     createdAt: now,
     updatedAt: now
   });

@@ -79,3 +79,9 @@ export class ProjectNameTakenError extends TaskDomainError {
     super('project_name_taken', `Project ${projectName} already exists.`);
   }
 }
+
+export class InvalidProjectOrderError extends TaskDomainError {
+  constructor(message = 'Project order payload is invalid.') {
+    super('invalid_project_order', message);
+  }
+}

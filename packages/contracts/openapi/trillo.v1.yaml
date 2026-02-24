@@ -195,6 +195,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+  /projects/reorder:
+    patch:
+      summary: Reorder projects
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderProjectsRequest'
+      responses:
+        '200':
+          description: Projects reordered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListProjectsResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
   /projects/{projectId}:
     patch:
       summary: Update project details
@@ -713,6 +749,16 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+    ReorderProjectsRequest:
+      type: object
+      required: [projectIds]
+      properties:
+        projectIds:
+          type: array
+          items:
+            type: string
+            minLength: 2
+            maxLength: 64
     CreateTaskRequest:
       type: object
       required: [boardId, title, category]
