@@ -43,6 +43,30 @@ describe('AuthService', () => {
     expect(session.user.username).toBe('john_doe');
   });
 
+  it('logs in pre-seeded user with short password', async () => {
+    const userRepository = new InMemoryUserRepository();
+    const passwordHasher = new FakePasswordHasher();
+    const now = new Date('2026-02-24T15:00:00.000Z');
+    const service = new AuthService(userRepository, passwordHasher, new FakeAccessTokenService(), () => now);
+
+    await userRepository.create({
+      id: '00000000-0000-4000-8000-000000000099',
+      username: 'dev',
+      email: 'dev@trillo.local',
+      displayName: 'Dev User',
+      passwordHash: await passwordHasher.hash('dev'),
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const session = await service.login({
+      username: 'dev',
+      password: 'dev'
+    });
+
+    expect(session.user.username).toBe('dev');
+  });
+
   it('rejects invalid credentials', async () => {
     const service = createService();
 

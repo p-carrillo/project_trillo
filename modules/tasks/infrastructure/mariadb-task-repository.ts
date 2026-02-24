@@ -16,7 +16,7 @@ interface TaskRow extends RowDataPacket {
   category: string;
   priority: 'low' | 'medium' | 'high';
   status: 'todo' | 'in_progress' | 'done';
-  task_type: 'task' | 'epic';
+  task_type: 'epic' | 'task' | 'bug';
   epic_id: string | null;
   created_at: Date;
   updated_at: Date;

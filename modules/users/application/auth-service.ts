@@ -7,6 +7,7 @@ import {
   UserNotFoundError,
   normalizeDisplayName,
   normalizeEmail,
+  normalizeLoginPassword,
   normalizePassword,
   normalizeUsername,
   toUserPublicProfile,
@@ -82,7 +83,7 @@ export class AuthService {
 
   async login(input: LoginInput): Promise<AuthSession> {
     const username = normalizeUsername(input.username);
-    const password = normalizePassword(input.password);
+    const password = normalizeLoginPassword(input.password);
 
     const user = await this.userRepository.findByUsername(username);
     if (!user) {

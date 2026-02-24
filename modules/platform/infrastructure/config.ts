@@ -1,6 +1,9 @@
 export interface PlatformConfig {
   host: string;
   port: number;
+  fixtures: {
+    developmentEnabled: boolean;
+  };
   auth: {
     jwtAccessSecret: string;
     jwtAccessExpiresInSeconds: number;
@@ -21,6 +24,7 @@ export interface PlatformConfig {
 export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   const host = env.HOST?.trim() || '0.0.0.0';
   const port = parseNumericEnv(env.PORT, 3000, 'PORT');
+  const developmentFixturesEnabled = parseBooleanEnv(env.DEV_FIXTURES_ENABLED, false);
 
   const dbHost = env.DB_HOST?.trim() || 'mariadb';
   const dbPort = parseNumericEnv(env.DB_PORT, 3306, 'DB_PORT');
@@ -40,6 +44,9 @@ export function loadPlatformConfig(env: NodeJS.ProcessEnv): PlatformConfig {
   return {
     host,
     port,
+    fixtures: {
+      developmentEnabled: developmentFixturesEnabled
+    },
     auth: {
       jwtAccessSecret,
       jwtAccessExpiresInSeconds,

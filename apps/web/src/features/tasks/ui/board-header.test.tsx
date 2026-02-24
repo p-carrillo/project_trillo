@@ -20,6 +20,8 @@ describe('BoardHeader', () => {
       />
     );
 
+    expect(screen.getByRole('heading', { level: 1, name: 'PROJECT ALPHA' })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Open workspace menu' }));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search tasks' }), {
       target: { value: 'infra' }

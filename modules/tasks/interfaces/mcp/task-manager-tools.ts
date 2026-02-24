@@ -171,7 +171,7 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
           description: { type: 'string', nullable: true },
           category: { type: 'string', minLength: 2, maxLength: 32 },
           priority: { type: 'string', enum: ['low', 'medium', 'high'] },
-          taskType: { type: 'string', enum: ['task', 'epic'] },
+          taskType: { type: 'string', enum: ['epic', 'task', 'bug'] },
           epicId: { type: 'string', nullable: true }
         },
         required: ['boardId', 'title', 'category'],
@@ -189,7 +189,7 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
           description: { type: 'string', nullable: true },
           category: { type: 'string', minLength: 2, maxLength: 32 },
           priority: { type: 'string', enum: ['low', 'medium', 'high'] },
-          taskType: { type: 'string', enum: ['task', 'epic'] },
+          taskType: { type: 'string', enum: ['epic', 'task', 'bug'] },
           epicId: { type: 'string', nullable: true }
         },
         required: ['taskId'],
@@ -393,7 +393,7 @@ function parseCreateTaskArgs(args: ToolArgs): {
 
   if (taskType !== undefined && !isTaskType(taskType)) {
     throw new ValidationError('Invalid request payload.', {
-      taskType: 'taskType must be one of: task, epic.'
+      taskType: 'taskType must be one of: epic, task, bug.'
     });
   }
 
@@ -466,7 +466,7 @@ function parseUpdateTaskArgs(args: ToolArgs): {
     const taskType = parseRequiredString(args.taskType, 'taskType');
     if (!isTaskType(taskType)) {
       throw new ValidationError('Invalid request payload.', {
-        taskType: 'taskType must be one of: task, epic.'
+        taskType: 'taskType must be one of: epic, task, bug.'
       });
     }
     payload.taskType = taskType;

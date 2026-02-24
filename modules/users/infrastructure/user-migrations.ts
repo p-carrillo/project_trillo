@@ -7,9 +7,26 @@ interface ExistsRow extends RowDataPacket {
   total: number;
 }
 
-const DEMO_USER_ID = '00000000-0000-4000-8000-000000000001';
+interface UserIdRow extends RowDataPacket {
+  id: string;
+}
 
-export async function runUserMigrations(pool: Pool): Promise<{ seedUserId: string }> {
+export interface UserMigrationOptions {
+  enableDevelopmentFixtures?: boolean;
+}
+
+export interface UserMigrationResult {
+  seedUserId: string;
+  developmentUserId: string | null;
+}
+
+const SEED_USER_ID = '00000000-0000-4000-8000-000000000001';
+const DEVELOPMENT_USER_ID = '00000000-0000-4000-8000-000000000002';
+
+export async function runUserMigrations(
+  pool: Pool,
+  options: UserMigrationOptions = {}
+): Promise<UserMigrationResult> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id CHAR(36) PRIMARY KEY,
@@ -39,9 +56,11 @@ export async function runUserMigrations(pool: Pool): Promise<{ seedUserId: strin
   }
 
   await ensureSeedUser(pool);
+  const developmentUserId = options.enableDevelopmentFixtures ? await ensureDevelopmentUser(pool) : null;
 
   return {
-    seedUserId: DEMO_USER_ID
+    seedUserId: SEED_USER_ID,
+    developmentUserId
   };
 }
 
@@ -56,7 +75,7 @@ async function ensureSeedUser(pool: Pool): Promise<void> {
     FROM users
     WHERE id = ?
     `,
-    [DEMO_USER_ID]
+    [SEED_USER_ID]
   );
 
   if ((rows[0]?.total ?? 0) > 0) {
@@ -72,8 +91,48 @@ async function ensureSeedUser(pool: Pool): Promise<void> {
     INSERT INTO users (id, username, email, display_name, password_hash, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [DEMO_USER_ID, username, email, displayName, passwordHash, now, now]
+    [SEED_USER_ID, username, email, displayName, passwordHash, now, now]
   );
+}
+
+async function ensureDevelopmentUser(pool: Pool): Promise<string> {
+  const username = normalizeUsername('dev');
+  const email = normalizeEmail('dev@trillo.local');
+  const displayName = normalizeDisplayName('Dev User');
+  const hasher = new ScryptPasswordHasher();
+  const passwordHash = await hasher.hash('dev');
+  const now = new Date();
+
+  await pool.query(
+    `
+    INSERT INTO users (id, username, email, display_name, password_hash, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      username = VALUES(username),
+      email = VALUES(email),
+      display_name = VALUES(display_name),
+      password_hash = VALUES(password_hash),
+      updated_at = VALUES(updated_at)
+    `,
+    [DEVELOPMENT_USER_ID, username, email, displayName, passwordHash, now, now]
+  );
+
+  const [rows] = await pool.query<UserIdRow[]>(
+    `
+    SELECT id
+    FROM users
+    WHERE username = ?
+    LIMIT 1
+    `,
+    [username]
+  );
+
+  const userId = rows[0]?.id;
+  if (!userId) {
+    throw new Error('Failed to resolve development user id.');
+  }
+
+  return userId;
 }
 
 async function hasIndex(pool: Pool, tableName: string, indexName: string): Promise<boolean> {

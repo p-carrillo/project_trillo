@@ -18,6 +18,16 @@ export function TaskCard({
   isDragDisabled = false
 }: TaskCardProps) {
   const taskType = task.taskType ?? 'task';
+  const tags =
+    taskType === 'epic'
+      ? [
+          { label: 'epic', className: 'task-tag task-tag--epic' },
+          { label: task.category, className: 'task-tag' }
+        ]
+      : [
+          { label: task.category, className: 'task-tag' },
+          { label: taskType, className: 'task-tag' }
+        ];
 
   return (
     <article
@@ -39,9 +49,11 @@ export function TaskCard({
     >
       <div className="task-meta-row">
         <div className="task-tags">
-          <span className="task-tag">{task.category}</span>
-          <span className="task-tag">{taskType}</span>
-          {taskType === 'epic' ? <span className="task-tag">epic</span> : null}
+          {tags.map((tag, index) => (
+            <span key={`${tag.label}-${index}`} className={tag.className}>
+              {tag.label}
+            </span>
+          ))}
         </div>
         <button
           type="button"

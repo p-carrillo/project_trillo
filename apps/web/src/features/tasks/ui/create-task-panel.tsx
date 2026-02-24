@@ -26,6 +26,8 @@ export function CreateTaskPanel({
 }: CreateTaskPanelProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const taskType = form.taskType ?? 'task';
+  const selectedEpicId = form.epicId ?? '';
+  const selectedPriority = form.priority ?? 'medium';
 
   useEffect(() => {
     if (isOpen) {
@@ -82,50 +84,78 @@ export function CreateTaskPanel({
           rows={4}
         />
 
-        <label htmlFor="taskType">Task Type</label>
-        <select
-          id="taskType"
-          value={taskType}
-          onChange={(event) => onUpdateField('taskType', event.target.value as CreateTaskRequest['taskType'])}
-        >
-          {taskTypes.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
+        <fieldset className="form-tag-fieldset">
+          <legend>Task Type</legend>
+          <div className="form-tag-group" role="radiogroup" aria-label="Task Type">
+            {taskTypes.map((type) => {
+              const isSelected = taskType === type;
 
-        {taskType === 'task' ? (
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  className={`task-tag form-tag-option ${isSelected ? 'form-tag-option--active' : ''}`}
+                  onClick={() => onUpdateField('taskType', type)}
+                >
+                  {type}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {taskType !== 'epic' ? (
           <>
-            <label htmlFor="epicId">Epic</label>
-            <select
-              id="epicId"
-              value={form.epicId ?? ''}
-              onChange={(event) => onUpdateField('epicId', event.target.value || null)}
-            >
-              <option value="">No epic</option>
-              {epics.map((epic) => (
-                <option key={epic.id} value={epic.id}>
-                  {epic.title}
-                </option>
-              ))}
-            </select>
+            {epics.length > 0 ? (
+              <fieldset className="form-tag-fieldset">
+                <legend>Epic</legend>
+                <div className="form-tag-group" role="radiogroup" aria-label="Epic">
+                  {epics.map((epic) => {
+                    const isSelected = selectedEpicId === epic.id;
+
+                    return (
+                      <button
+                        key={epic.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        className={`task-tag form-tag-option ${isSelected ? 'form-tag-option--active' : ''}`}
+                        onClick={() => onUpdateField('epicId', isSelected ? null : epic.id)}
+                      >
+                        {epic.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ) : null}
             {epics.length === 0 ? <p className="form-helper">Create an epic first to link tasks.</p> : null}
           </>
         ) : null}
 
-        <label htmlFor="priority">Priority</label>
-        <select
-          id="priority"
-          value={form.priority ?? 'medium'}
-          onChange={(event) => onUpdateField('priority', event.target.value as CreateTaskRequest['priority'])}
-        >
-          {taskPriorities.map((priority) => (
-            <option key={priority} value={priority}>
-              {priority}
-            </option>
-          ))}
-        </select>
+        <fieldset className="form-tag-fieldset">
+          <legend>Priority</legend>
+          <div className="form-tag-group" role="radiogroup" aria-label="Priority">
+            {taskPriorities.map((priority) => {
+              const isSelected = selectedPriority === priority;
+
+              return (
+                <button
+                  key={priority}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  className={`task-tag form-tag-option ${isSelected ? 'form-tag-option--active' : ''}`}
+                  onClick={() => onUpdateField('priority', priority)}
+                >
+                  {priority}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <div className="form-actions">
           {mode === 'edit' && onDeleteTask ? (

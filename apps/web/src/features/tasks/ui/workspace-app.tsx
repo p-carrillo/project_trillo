@@ -567,7 +567,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       category: form.category,
       priority: form.priority ?? 'medium',
       taskType,
-      epicId: taskType === 'task' ? form.epicId ?? null : null
+      epicId: taskType !== 'epic' ? form.epicId ?? null : null
     };
 
     try {

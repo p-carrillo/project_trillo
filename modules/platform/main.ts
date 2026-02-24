@@ -20,8 +20,14 @@ async function start(): Promise<void> {
   const config = loadPlatformConfig(process.env);
   const pool = createDatabasePool(config);
 
-  const { seedUserId } = await runUserMigrations(pool);
-  await runTaskMigrations(pool, seedUserId);
+  const { seedUserId, developmentUserId } = await runUserMigrations(pool, {
+    enableDevelopmentFixtures: config.fixtures.developmentEnabled
+  });
+  await runTaskMigrations(pool, {
+    defaultOwnerUserId: seedUserId,
+    enableDevelopmentFixtures: config.fixtures.developmentEnabled,
+    developmentOwnerUserId: developmentUserId
+  });
 
   const userRepository = new MariaDbUserRepository(pool);
   const passwordHasher = new ScryptPasswordHasher();

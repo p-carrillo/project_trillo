@@ -53,6 +53,54 @@ describe('buildTaskBoardColumns', () => {
     expect(columns[2]?.count).toBe(0);
   });
 
+  it('keeps epic tasks at the top within each status column', () => {
+    const unorderedTasks = [
+      {
+        id: 'task-1',
+        boardId: 'project-alpha',
+        title: 'Refine billing copy',
+        description: null,
+        category: 'Marketing',
+        priority: 'medium' as const,
+        status: 'todo' as const,
+        taskType: 'task' as const,
+        epicId: null,
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z'
+      },
+      {
+        id: 'epic-2',
+        boardId: 'project-alpha',
+        title: 'Improve onboarding flow',
+        description: null,
+        category: 'Product',
+        priority: 'high' as const,
+        status: 'todo' as const,
+        taskType: 'epic' as const,
+        epicId: null,
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z'
+      },
+      {
+        id: 'task-2',
+        boardId: 'project-alpha',
+        title: 'Add telemetry events',
+        description: null,
+        category: 'Platform',
+        priority: 'high' as const,
+        status: 'todo' as const,
+        taskType: 'task' as const,
+        epicId: 'epic-2',
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z'
+      }
+    ];
+
+    const columns = buildTaskBoardColumns(unorderedTasks, '');
+
+    expect(columns[0]?.tasks.map((task) => task.id)).toEqual(['epic-2', 'task-1', 'task-2']);
+  });
+
   it('filters tasks by search text', () => {
     const columns = buildTaskBoardColumns(tasks, 'payment');
 

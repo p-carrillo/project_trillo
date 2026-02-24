@@ -49,7 +49,12 @@ export function TaskColumn({
       aria-label={`${column.label} column`}
       draggable
       onDragStart={(event) => {
-        if (!isColumnDragStartTarget(event.target)) {
+        const dragStartTarget = resolveColumnDragStartTarget(event.target);
+        if (dragStartTarget === 'task-card') {
+          return;
+        }
+
+        if (dragStartTarget === 'interactive') {
           event.preventDefault();
           return;
         }
@@ -130,14 +135,20 @@ export function TaskColumn({
   );
 }
 
-function isColumnDragStartTarget(target: EventTarget | null): boolean {
+type ColumnDragStartTarget = 'column' | 'task-card' | 'interactive';
+
+function resolveColumnDragStartTarget(target: EventTarget | null): ColumnDragStartTarget {
   if (!(target instanceof HTMLElement)) {
-    return true;
+    return 'column';
   }
 
   if (target.closest('.task-card')) {
-    return false;
+    return 'task-card';
   }
 
-  return target.closest('button, input, textarea, select, a') === null;
+  if (target.closest('button, input, textarea, select, a')) {
+    return 'interactive';
+  }
+
+  return 'column';
 }

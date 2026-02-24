@@ -4,7 +4,7 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 export const TASK_PRIORITIES = ['low', 'medium', 'high'] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
-export const TASK_TYPES = ['task', 'epic'] as const;
+export const TASK_TYPES = ['epic', 'task', 'bug'] as const;
 export type TaskType = (typeof TASK_TYPES)[number];
 
 export function isTaskStatus(value: string): value is TaskStatus {

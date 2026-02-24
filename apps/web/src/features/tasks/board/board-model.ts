@@ -37,7 +37,7 @@ export function buildTaskBoardColumns(
     : filteredByEpic;
 
   return taskStatuses.map((status) => {
-    const statusTasks = filtered.filter((task) => task.status === status);
+    const statusTasks = orderTasksByEpicFirst(filtered.filter((task) => task.status === status));
 
     return {
       status,
@@ -46,6 +46,22 @@ export function buildTaskBoardColumns(
       tasks: statusTasks
     };
   });
+}
+
+function orderTasksByEpicFirst(tasks: TaskDto[]): TaskDto[] {
+  const epicTasks: TaskDto[] = [];
+  const regularTasks: TaskDto[] = [];
+
+  for (const task of tasks) {
+    if ((task.taskType ?? 'task') === 'epic') {
+      epicTasks.push(task);
+      continue;
+    }
+
+    regularTasks.push(task);
+  }
+
+  return [...epicTasks, ...regularTasks];
 }
 
 export function getNextStatus(status: TaskStatus): TaskStatus | null {

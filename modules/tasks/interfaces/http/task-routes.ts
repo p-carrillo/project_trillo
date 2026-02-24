@@ -208,7 +208,7 @@ function parseCreateTaskBody(body: FastifyRequest['body']): CreateTaskInput {
 
   if (typeof input.taskType === 'string') {
     if (!isTaskType(input.taskType)) {
-      throw new ValidationError({ taskType: 'taskType must be one of: task, epic.' });
+      throw new ValidationError({ taskType: 'taskType must be one of: epic, task, bug.' });
     }
 
     payload.taskType = input.taskType;
@@ -269,7 +269,7 @@ function parseUpdateTaskBody(body: FastifyRequest['body']): UpdateTaskInput {
 
   if (input.taskType !== undefined) {
     if (typeof input.taskType !== 'string' || !isTaskType(input.taskType)) {
-      throw new ValidationError({ taskType: 'taskType must be one of: task, epic.' });
+      throw new ValidationError({ taskType: 'taskType must be one of: epic, task, bug.' });
     }
     payload.taskType = input.taskType;
   }

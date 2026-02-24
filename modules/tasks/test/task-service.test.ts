@@ -74,6 +74,28 @@ describe('TaskService', () => {
     ).rejects.toBeInstanceOf(InvalidEpicReferenceError);
   });
 
+  it('creates bug tasks linked to an epic', async () => {
+    const service = await buildTaskService();
+
+    const epic = await service.createTask(USER_ALPHA, {
+      boardId: 'project-alpha',
+      title: 'Stability Campaign',
+      category: 'Platform',
+      taskType: 'epic'
+    });
+
+    const bug = await service.createTask(USER_ALPHA, {
+      boardId: 'project-alpha',
+      title: 'Fix login race condition',
+      category: 'Platform',
+      taskType: 'bug',
+      epicId: epic.id
+    });
+
+    expect(bug.taskType).toBe('bug');
+    expect(bug.epicId).toBe(epic.id);
+  });
+
   it('rejects tasks linked to non-epic cards', async () => {
     const service = await buildTaskService();
 
@@ -193,6 +215,31 @@ describe('TaskService', () => {
     await expect(
       service.updateTask(USER_ALPHA, epic.id, {
         taskType: 'task'
+      })
+    ).rejects.toBeInstanceOf(EpicHasLinkedTasksError);
+  });
+
+  it('rejects converting epic to bug while linked tasks exist', async () => {
+    const service = await buildTaskService();
+
+    const epic = await service.createTask(USER_ALPHA, {
+      boardId: 'project-alpha',
+      title: 'Incident Program',
+      category: 'Platform',
+      taskType: 'epic'
+    });
+
+    await service.createTask(USER_ALPHA, {
+      boardId: 'project-alpha',
+      title: 'Patch redis timeout',
+      category: 'Platform',
+      taskType: 'bug',
+      epicId: epic.id
+    });
+
+    await expect(
+      service.updateTask(USER_ALPHA, epic.id, {
+        taskType: 'bug'
       })
     ).rejects.toBeInstanceOf(EpicHasLinkedTasksError);
   });

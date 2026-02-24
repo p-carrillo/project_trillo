@@ -68,6 +68,16 @@ export function normalizePassword(rawPassword: string): string {
   return password;
 }
 
+export function normalizeLoginPassword(rawPassword: string): string {
+  const password = rawPassword.trim();
+
+  if (password.length === 0 || password.length > 120) {
+    throw new InvalidPasswordError();
+  }
+
+  return password;
+}
+
 export function toUserPublicProfile(user: User): UserPublicProfile {
   return {
     id: user.id,

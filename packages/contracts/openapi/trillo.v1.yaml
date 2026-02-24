@@ -649,7 +649,7 @@ components:
       enum: [low, medium, high]
     TaskType:
       type: string
-      enum: [task, epic]
+      enum: [epic, task, bug]
     Task:
       type: object
       required:

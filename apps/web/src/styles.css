@@ -408,10 +408,11 @@ select {
   gap: 0.52rem;
 }
 
-.board-header h1 {
-  font-family: var(--font-display);
+.board-project-title {
+  font-family: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', sans-serif;
   font-size: clamp(1.22rem, 3.2vw, 1.9rem);
   line-height: 1.08;
+  letter-spacing: 0.03em;
 }
 
 .menu-toggle {
@@ -724,6 +725,10 @@ select {
   text-overflow: ellipsis;
 }
 
+.task-tag--epic {
+  border: 1px solid #000000;
+}
+
 .task-settings-btn {
   width: 1.1rem;
   height: 1.1rem;
@@ -937,6 +942,43 @@ select {
 .create-form label {
   font-size: 0.85rem;
   color: var(--text-soft);
+}
+
+.form-tag-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.form-tag-fieldset legend {
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.form-tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+
+.form-tag-option {
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.form-tag-option--active {
+  border-color: #000000;
+  background: #111111;
+  color: #f4f4f4;
+}
+
+.form-tag-option:focus-visible {
+  outline: 2px solid rgba(32, 96, 223, 0.26);
+  outline-offset: 1px;
 }
 
 .form-helper {

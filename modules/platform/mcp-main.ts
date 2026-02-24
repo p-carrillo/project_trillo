@@ -25,8 +25,14 @@ async function start(): Promise<void> {
   const runtime = loadMcpRuntimeContext(process.env, process.argv.slice(2));
   const pool = createDatabasePool(runtime.config);
 
-  const { seedUserId } = await runUserMigrations(pool);
-  await runTaskMigrations(pool, seedUserId);
+  const { seedUserId, developmentUserId } = await runUserMigrations(pool, {
+    enableDevelopmentFixtures: runtime.config.fixtures.developmentEnabled
+  });
+  await runTaskMigrations(pool, {
+    defaultOwnerUserId: seedUserId,
+    enableDevelopmentFixtures: runtime.config.fixtures.developmentEnabled,
+    developmentOwnerUserId: developmentUserId
+  });
 
   const userRepository = new MariaDbUserRepository(pool);
   const authService = new AuthService(

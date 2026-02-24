@@ -66,6 +66,10 @@ Services:
 - Backend: `http://localhost:3000`
 - MariaDB: internal Docker network only (not exposed to host)
 
+Development fixtures (`DEV_FIXTURES_ENABLED=true` in `compose.dev.yml`):
+- Seed login: `dev` / `dev`
+- Preloaded with multiple boards/projects and fun-realistic tasks across `todo`, `in_progress`, and `done`
+
 Inspect MariaDB from Docker network:
 ```bash
 docker compose -f docker/compose.dev.yml exec -T mariadb mariadb -uroot -proot -e "SHOW DATABASES;"

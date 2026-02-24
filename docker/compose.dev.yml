@@ -32,6 +32,7 @@ services:
       JWT_ACCESS_SECRET: change-me-in-production
       JWT_ACCESS_EXPIRES_IN: 86400
       AUTH_REGISTER_ENABLED: 'true'
+      DEV_FIXTURES_ENABLED: 'true'
       HTTP_API_KEY: ''
       LOG_LEVEL: info
     depends_on:

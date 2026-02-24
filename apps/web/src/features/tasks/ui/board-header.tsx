@@ -17,6 +17,8 @@ export function BoardHeader({
   onSearchTextChange,
   onOpenCreatePanel
 }: BoardHeaderProps) {
+  const projectTitle = projectName.toLocaleUpperCase();
+
   return (
     <header className="board-header">
       <div className="board-header-main">
@@ -31,7 +33,7 @@ export function BoardHeader({
           Menu
         </button>
 
-        <h1>{projectName}</h1>
+        <h1 className="board-project-title">{projectTitle}</h1>
       </div>
 
       <div className="header-actions">

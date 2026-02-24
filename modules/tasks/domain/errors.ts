@@ -52,7 +52,7 @@ export class InvalidTaskStatusTransitionError extends TaskDomainError {
 
 export class InvalidTaskTypeError extends TaskDomainError {
   constructor() {
-    super('invalid_task_type', 'Task type must be one of: task, epic.');
+    super('invalid_task_type', 'Task type must be one of: epic, task, bug.');
   }
 }
 

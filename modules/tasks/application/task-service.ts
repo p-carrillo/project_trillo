@@ -92,7 +92,7 @@ export class TaskService {
       epicId = null;
     }
 
-    if (current.taskType === 'epic' && taskType === 'task') {
+    if (current.taskType === 'epic' && taskType !== 'epic') {
       await this.assertEpicHasNoLinkedTasks(userId, current.boardId, current.id);
     }
 
