@@ -74,6 +74,65 @@ describe('CreateTaskPanel', () => {
     expect(screen.queryByRole('radio', { name: 'No epic' })).not.toBeInTheDocument();
     expect(screen.getByText('Create an epic first to link tasks.')).toBeInTheDocument();
   });
+
+  it('renders linked tasks section when task type is epic', () => {
+    renderPanel({
+      form: createForm({ taskType: 'epic', epicId: null }),
+      epicLinkedTasks: [
+        { id: 'task-2', title: 'Linked planning task' },
+        { id: 'task-3', title: 'Prepare copy review' }
+      ],
+      canManageEpicLinks: true
+    });
+
+    expect(screen.getByText('Linked Tasks')).toBeInTheDocument();
+    expect(screen.getByText('Linked planning task')).toBeInTheDocument();
+    expect(screen.getByText('Prepare copy review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unlink task Linked planning task' })).toBeInTheDocument();
+  });
+
+  it('triggers unlink callback from linked tasks section', () => {
+    const onUnlinkEpicLinkedTask = vi.fn();
+    renderPanel({
+      form: createForm({ taskType: 'epic', epicId: null }),
+      epicLinkedTasks: [{ id: 'task-2', title: 'Linked planning task' }],
+      canManageEpicLinks: true,
+      onUnlinkEpicLinkedTask
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink task Linked planning task' }));
+
+    expect(onUnlinkEpicLinkedTask).toHaveBeenCalledWith('task-2');
+  });
+
+  it('creates linked tasks using title input and plus button', () => {
+    const onCreateEpicLinkedTask = vi.fn();
+    renderPanel({
+      form: createForm({ taskType: 'epic', epicId: null }),
+      canManageEpicLinks: true,
+      onCreateEpicLinkedTask
+    });
+
+    fireEvent.change(screen.getByLabelText('New linked task title'), {
+      target: { value: 'Write launch notes' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create linked task' }));
+
+    expect(onCreateEpicLinkedTask).toHaveBeenCalledWith('Write launch notes');
+  });
+
+  it('shows disabled linked tasks helper when epic links cannot be managed yet', () => {
+    renderPanel({
+      mode: 'create',
+      form: createForm({ taskType: 'epic', epicId: null }),
+      canManageEpicLinks: false,
+      epicLinksHint: 'Save epic first to manage linked tasks.'
+    });
+
+    const createButton = screen.getByRole('button', { name: 'Create linked task' });
+    expect(screen.getByText('Save epic first to manage linked tasks.')).toBeInTheDocument();
+    expect(createButton).toBeDisabled();
+  });
 });
 
 function renderPanel(overrides: Partial<ComponentProps<typeof CreateTaskPanel>> = {}) {
@@ -88,9 +147,16 @@ function renderPanel(overrides: Partial<ComponentProps<typeof CreateTaskPanel>> 
         title: 'Launch Campaign'
       }
     ],
+    epicLinkedTasks: [],
+    canManageEpicLinks: false,
+    epicLinksHint: undefined,
+    isCreatingEpicLinkedTask: false,
+    unlinkingEpicLinkedTaskIds: [],
     onClose: vi.fn(),
     onSubmit: vi.fn(),
-    onUpdateField: vi.fn()
+    onUpdateField: vi.fn(),
+    onCreateEpicLinkedTask: vi.fn(),
+    onUnlinkEpicLinkedTask: vi.fn()
   };
 
   const props = {

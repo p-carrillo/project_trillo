@@ -987,6 +987,90 @@ select {
   font-size: 0.8rem;
 }
 
+.epic-linked-tasks {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.epic-linked-tasks legend {
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.epic-linked-tasks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.36rem;
+}
+
+.epic-linked-tasks-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  padding: 0.42rem 0.52rem;
+}
+
+.epic-linked-tasks-item-title {
+  font-size: 0.84rem;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epic-linked-task-action {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  color: var(--text-main);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.epic-linked-task-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.epic-linked-task-action--create {
+  border-color: #000000;
+  background: #111111;
+  color: #ffffff;
+}
+
+.epic-linked-task-create {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.epic-linked-task-create label {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.epic-linked-task-create-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.38rem;
+  align-items: center;
+}
+
+.epic-linked-tasks--disabled {
+  opacity: 0.78;
+}
+
 .form-actions {
   margin-top: 0.74rem;
   display: flex;

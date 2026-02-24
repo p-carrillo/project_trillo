@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { taskPriorities, taskTypes, type CreateTaskRequest } from '@trillo/contracts';
 
 interface CreateTaskPanelProps {
@@ -7,9 +7,16 @@ interface CreateTaskPanelProps {
   mode: 'create' | 'edit';
   form: CreateTaskRequest;
   epics: Array<{ id: string; title: string }>;
+  epicLinkedTasks: Array<{ id: string; title: string }>;
+  canManageEpicLinks: boolean;
+  epicLinksHint?: string | undefined;
+  isCreatingEpicLinkedTask: boolean;
+  unlinkingEpicLinkedTaskIds: string[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateField: <Key extends keyof CreateTaskRequest>(key: Key, value: CreateTaskRequest[Key]) => void;
+  onCreateEpicLinkedTask: (title: string) => void;
+  onUnlinkEpicLinkedTask: (taskId: string) => void;
   onDeleteTask?: () => void;
 }
 
@@ -19,12 +26,20 @@ export function CreateTaskPanel({
   mode,
   form,
   epics,
+  epicLinkedTasks,
+  canManageEpicLinks,
+  epicLinksHint,
+  isCreatingEpicLinkedTask,
+  unlinkingEpicLinkedTaskIds,
   onClose,
   onSubmit,
   onUpdateField,
+  onCreateEpicLinkedTask,
+  onUnlinkEpicLinkedTask,
   onDeleteTask
 }: CreateTaskPanelProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const [newLinkedTaskTitle, setNewLinkedTaskTitle] = useState('');
   const taskType = form.taskType ?? 'task';
   const selectedEpicId = form.epicId ?? '';
   const selectedPriority = form.priority ?? 'medium';
@@ -35,8 +50,41 @@ export function CreateTaskPanel({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setNewLinkedTaskTitle('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (taskType !== 'epic') {
+      setNewLinkedTaskTitle('');
+    }
+  }, [taskType]);
+
   const panelTitle = mode === 'edit' ? 'Edit task' : 'Create new task';
   const submitLabel = mode === 'edit' ? 'Save changes' : 'Create';
+  const isLinkedTaskCreateDisabled =
+    !canManageEpicLinks || isCreatingEpicLinkedTask || newLinkedTaskTitle.trim().length === 0;
+
+  function handleCreateLinkedTask() {
+    const normalizedTitle = newLinkedTaskTitle.trim();
+    if (!normalizedTitle || !canManageEpicLinks || isCreatingEpicLinkedTask) {
+      return;
+    }
+
+    onCreateEpicLinkedTask(normalizedTitle);
+    setNewLinkedTaskTitle('');
+  }
+
+  function handleLinkedTaskTitleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    handleCreateLinkedTask();
+  }
 
   return (
     <aside
@@ -105,6 +153,63 @@ export function CreateTaskPanel({
             })}
           </div>
         </fieldset>
+
+        {taskType === 'epic' ? (
+          <fieldset className={`epic-linked-tasks ${canManageEpicLinks ? '' : 'epic-linked-tasks--disabled'}`}>
+            <legend>Linked Tasks</legend>
+            {epicLinkedTasks.length > 0 ? (
+              <ul className="epic-linked-tasks-list">
+                {epicLinkedTasks.map((linkedTask) => {
+                  const isUnlinking = unlinkingEpicLinkedTaskIds.includes(linkedTask.id);
+                  const isUnlinkDisabled = !canManageEpicLinks || isCreatingEpicLinkedTask || isUnlinking;
+
+                  return (
+                    <li key={linkedTask.id} className="epic-linked-tasks-item">
+                      <span className="epic-linked-tasks-item-title">{linkedTask.title}</span>
+                      <button
+                        type="button"
+                        className="epic-linked-task-action"
+                        onClick={() => onUnlinkEpicLinkedTask(linkedTask.id)}
+                        disabled={isUnlinkDisabled}
+                        aria-label={`Unlink task ${linkedTask.title}`}
+                      >
+                        -
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {canManageEpicLinks && epicLinkedTasks.length === 0 ? (
+              <p className="form-helper">No linked tasks yet.</p>
+            ) : null}
+            {!canManageEpicLinks && epicLinksHint ? <p className="form-helper">{epicLinksHint}</p> : null}
+            <div className="epic-linked-task-create">
+              <label htmlFor="new-linked-task-title">New linked task title</label>
+              <div className="epic-linked-task-create-row">
+                <input
+                  id="new-linked-task-title"
+                  value={newLinkedTaskTitle}
+                  onChange={(event) => setNewLinkedTaskTitle(event.target.value)}
+                  onKeyDown={handleLinkedTaskTitleKeyDown}
+                  maxLength={140}
+                  minLength={3}
+                  placeholder="Task title"
+                  disabled={!canManageEpicLinks || isCreatingEpicLinkedTask}
+                />
+                <button
+                  type="button"
+                  className="epic-linked-task-action epic-linked-task-action--create"
+                  onClick={handleCreateLinkedTask}
+                  disabled={isLinkedTaskCreateDisabled}
+                  aria-label="Create linked task"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </fieldset>
+        ) : null}
 
         {taskType !== 'epic' ? (
           <>

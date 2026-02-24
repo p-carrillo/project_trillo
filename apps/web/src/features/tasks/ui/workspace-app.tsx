@@ -88,6 +88,8 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+  const [isCreatingEpicLinkedTask, setIsCreatingEpicLinkedTask] = useState(false);
+  const [unlinkingEpicLinkedTaskIds, setUnlinkingEpicLinkedTaskIds] = useState<string[]>([]);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isDeletingProjectId, setIsDeletingProjectId] = useState<string | null>(null);
@@ -148,6 +150,35 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     () => epics.filter((epic) => epic.id !== editingTaskId),
     [editingTaskId, epics]
   );
+  const editingTask = useMemo(
+    () => normalizedTasks.find((task) => task.id === editingTaskId) ?? null,
+    [editingTaskId, normalizedTasks]
+  );
+  const epicLinkedTasks = useMemo(() => {
+    if (!editingTaskId) {
+      return [];
+    }
+
+    return normalizedTasks
+      .filter((task) => task.epicId === editingTaskId && task.taskType !== 'epic' && task.id !== editingTaskId)
+      .map((task) => ({ id: task.id, title: task.title }));
+  }, [editingTaskId, normalizedTasks]);
+  const canManageEpicLinks = Boolean(editingTaskId && selectedProjectId && editingTask?.taskType === 'epic');
+  const epicLinksHint = useMemo(() => {
+    if ((form.taskType ?? 'task') !== 'epic') {
+      return undefined;
+    }
+
+    if (!editingTaskId) {
+      return 'Save epic first to manage linked tasks.';
+    }
+
+    if (editingTask?.taskType !== 'epic') {
+      return 'Save changes first to convert this task into an epic, then manage linked tasks.';
+    }
+
+    return undefined;
+  }, [editingTask, editingTaskId, form.taskType]);
 
   useEffect(() => {
     void initializeProjects();
@@ -582,6 +613,54 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }
   }
 
+  async function handleUnlinkEpicLinkedTask(taskId: string) {
+    if (!canManageEpicLinks || unlinkingEpicLinkedTaskIds.includes(taskId) || taskId === editingTaskId) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setUnlinkingEpicLinkedTaskIds((current) => [...current, taskId]);
+
+    try {
+      const updatedTask = await updateTask(taskId, { epicId: null });
+      setTasks((current) =>
+        current.map((item) => (item.id === taskId ? normalizeTaskDto(updatedTask, { taskType: 'task', epicId: null }) : item))
+      );
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setUnlinkingEpicLinkedTaskIds((current) => current.filter((item) => item !== taskId));
+    }
+  }
+
+  async function handleCreateEpicLinkedTask(title: string) {
+    const normalizedTitle = title.trim();
+    if (!canManageEpicLinks || !selectedProjectId || !editingTaskId || normalizedTitle.length === 0) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsCreatingEpicLinkedTask(true);
+
+    try {
+      const createdTask = await createTask({
+        boardId: selectedProjectId,
+        title: normalizedTitle,
+        category: 'General',
+        priority: 'medium',
+        taskType: 'task',
+        epicId: editingTaskId
+      });
+      setTasks((current) =>
+        [normalizeTaskDto(createdTask, { taskType: 'task', epicId: editingTaskId }), ...current]
+      );
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setIsCreatingEpicLinkedTask(false);
+    }
+  }
+
   async function performDeleteTask(taskId: string): Promise<boolean> {
     setErrorMessage(null);
 
@@ -754,6 +833,8 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function resetFormState(projectId: string | null) {
+    setIsCreatingEpicLinkedTask(false);
+    setUnlinkingEpicLinkedTaskIds([]);
     setEditingTaskId(null);
     setForm(createInitialForm(projectId));
   }
@@ -842,9 +923,20 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
             mode={editingTaskId ? 'edit' : 'create'}
             form={form}
             epics={selectableEpics}
+            epicLinkedTasks={epicLinkedTasks}
+            canManageEpicLinks={canManageEpicLinks}
+            epicLinksHint={epicLinksHint}
+            isCreatingEpicLinkedTask={isCreatingEpicLinkedTask}
+            unlinkingEpicLinkedTaskIds={unlinkingEpicLinkedTaskIds}
             onClose={handleCloseCreatePanel}
             onSubmit={handleSubmitTask}
             onUpdateField={handleUpdateFormField}
+            onCreateEpicLinkedTask={(title) => {
+              void handleCreateEpicLinkedTask(title);
+            }}
+            onUnlinkEpicLinkedTask={(taskId) => {
+              void handleUnlinkEpicLinkedTask(taskId);
+            }}
             {...(editingTaskId
               ? {
                   onDeleteTask: () => {
