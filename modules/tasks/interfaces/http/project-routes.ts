@@ -1,5 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  ContextNotFoundError,
+  InvalidContextIdError,
+  InvalidProjectContextSelectionError,
   InvalidProjectOrderError,
   InvalidProjectDescriptionError,
   InvalidProjectNameError,
@@ -32,14 +35,15 @@ export async function registerProjectRoutes(
   projectService: ProjectService,
   resolveAuthenticatedUser: (request: FastifyRequest) => Promise<string | null>
 ): Promise<void> {
-  fastify.get('/api/v1/projects', async (_request, reply) => {
+  fastify.get('/api/v1/projects', async (request, reply) => {
     return handleRequest(reply, async () => {
-      const userId = await resolveAuthenticatedUser(_request);
+      const userId = await resolveAuthenticatedUser(request);
       if (!userId) {
         return unauthorizedResponse();
       }
 
-      const projects = await projectService.listProjects(userId);
+      const query = parseListProjectsQuery(request.query);
+      const projects = await projectService.listProjects(userId, query.contextId);
 
       return {
         statusCode: 200,
@@ -161,6 +165,30 @@ async function handleRequest(
   }
 }
 
+function parseListProjectsQuery(query: FastifyRequest['query']): { contextId?: string } {
+  if (query === undefined || query === null) {
+    return {};
+  }
+
+  if (typeof query !== 'object' || Array.isArray(query)) {
+    throw new ValidationError({ contextId: 'contextId must be a string.' });
+  }
+
+  const contextId = (query as Record<string, unknown>).contextId;
+
+  if (contextId === undefined) {
+    return {};
+  }
+
+  if (typeof contextId !== 'string') {
+    throw new ValidationError({ contextId: 'contextId must be a string.' });
+  }
+
+  return {
+    contextId: contextId.trim()
+  };
+}
+
 function parseCreateProjectBody(body: FastifyRequest['body']): CreateProjectInput {
   const input = parseRecordBody(body);
   const name = input.name;
@@ -178,6 +206,10 @@ function parseCreateProjectBody(body: FastifyRequest['body']): CreateProjectInpu
 
   if (typeof description === 'string' || description === null) {
     payload.description = description;
+  }
+
+  if (input.contextIds !== undefined) {
+    payload.contextIds = parseContextIds(input.contextIds);
   }
 
   return payload;
@@ -203,9 +235,13 @@ function parseUpdateProjectBody(body: FastifyRequest['body']): UpdateProjectInpu
     payload.description = input.description;
   }
 
+  if (input.contextIds !== undefined) {
+    payload.contextIds = parseContextIds(input.contextIds);
+  }
+
   if (Object.keys(payload).length === 0) {
     throw new ValidationError({
-      body: 'At least one field is required: name, description.'
+      body: 'At least one field is required: name, description, contextIds.'
     });
   }
 
@@ -233,11 +269,26 @@ function parseReorderProjectsBody(body: FastifyRequest['body']): { projectIds: s
   };
 }
 
+function parseContextIds(rawContextIds: unknown): string[] {
+  if (!Array.isArray(rawContextIds)) {
+    throw new ValidationError({ contextIds: 'contextIds must be an array of context ids.' });
+  }
+
+  return rawContextIds.map((value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new ValidationError({ contextIds: 'contextIds must contain non-empty strings.' });
+    }
+
+    return value.trim();
+  });
+}
+
 function toProjectDto(project: Project) {
   return {
     id: project.id,
     name: project.name,
     description: project.description,
+    contextIds: project.contextIds,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString()
   };
@@ -275,7 +326,12 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
     };
   }
 
-  if (error instanceof InvalidProjectNameError || error instanceof InvalidProjectDescriptionError) {
+  if (
+    error instanceof InvalidProjectNameError ||
+    error instanceof InvalidProjectDescriptionError ||
+    error instanceof InvalidContextIdError ||
+    error instanceof InvalidProjectContextSelectionError
+  ) {
     return {
       statusCode: 400,
       body: {
@@ -311,7 +367,7 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
     };
   }
 
-  if (error instanceof ProjectNotFoundError) {
+  if (error instanceof ProjectNotFoundError || error instanceof ContextNotFoundError) {
     return {
       statusCode: 404,
       body: {

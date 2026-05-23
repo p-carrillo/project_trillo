@@ -38,6 +38,30 @@ export class InvalidProjectDescriptionError extends TaskDomainError {
   }
 }
 
+export class InvalidContextIdError extends TaskDomainError {
+  constructor() {
+    super('invalid_context_id', 'Context id must have between 2 and 64 characters.');
+  }
+}
+
+export class InvalidContextNameError extends TaskDomainError {
+  constructor() {
+    super('invalid_context_name', 'Context name must have between 2 and 120 characters.');
+  }
+}
+
+export class InvalidContextDescriptionError extends TaskDomainError {
+  constructor() {
+    super('invalid_context_description', 'Context description must have at most 4000 characters.');
+  }
+}
+
+export class InvalidProjectContextSelectionError extends TaskDomainError {
+  constructor(message = 'Project must include at least one context.') {
+    super('invalid_project_context_selection', message);
+  }
+}
+
 export class TaskNotFoundError extends TaskDomainError {
   constructor(taskId: string) {
     super('task_not_found', `Task ${taskId} was not found.`);
@@ -77,6 +101,24 @@ export class ProjectNotFoundError extends TaskDomainError {
 export class ProjectNameTakenError extends TaskDomainError {
   constructor(projectName: string) {
     super('project_name_taken', `Project ${projectName} already exists.`);
+  }
+}
+
+export class ContextNotFoundError extends TaskDomainError {
+  constructor(contextId: string) {
+    super('context_not_found', `Context ${contextId} was not found.`);
+  }
+}
+
+export class ContextNameTakenError extends TaskDomainError {
+  constructor(contextName: string) {
+    super('context_name_taken', `Context ${contextName} already exists.`);
+  }
+}
+
+export class ContextDeleteNotAllowedError extends TaskDomainError {
+  constructor(message = 'Cannot delete the last remaining context.') {
+    super('context_delete_not_allowed', message);
   }
 }
 

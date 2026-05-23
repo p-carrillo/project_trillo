@@ -301,6 +301,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Project Alpha',
     description: null,
+    contextIds: ['context-alpha'],
     sortOrder: 0,
     createdAt: now,
     updatedAt: now
@@ -311,6 +312,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Board A',
     description: null,
+    contextIds: ['context-alpha'],
     sortOrder: 1,
     createdAt: now,
     updatedAt: now
@@ -321,6 +323,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_ALPHA,
     name: 'Board B',
     description: null,
+    contextIds: ['context-alpha'],
     sortOrder: 2,
     createdAt: now,
     updatedAt: now
@@ -331,6 +334,7 @@ async function buildTaskService(): Promise<TaskService> {
     ownerUserId: USER_BETA,
     name: 'Beta Board',
     description: null,
+    contextIds: ['context-beta'],
     sortOrder: 0,
     createdAt: now,
     updatedAt: now

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTaskManagerToolset } from '../interfaces/mcp';
 import { ProjectService, TaskService } from '../application';
+import { InMemoryContextRepository } from './helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from './helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from './helpers/in-memory-task-repository';
 
@@ -98,22 +99,25 @@ describe('Task manager MCP tools', () => {
 });
 
 async function createToolset() {
+  const contextRepository = new InMemoryContextRepository();
   const projectRepository = new InMemoryProjectRepository();
   const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const now = new Date('2026-02-19T10:00:00.000Z');
   const actorUserId = 'user-alpha';
+  const defaultContext = await contextRepository.ensureDefaultContext(actorUserId, now);
 
   await projectRepository.create({
     id: 'project-alpha',
     ownerUserId: actorUserId,
     name: 'Project Alpha',
     description: 'Primary board for product planning and delivery.',
+    contextIds: [defaultContext.id],
     sortOrder: 0,
     createdAt: now,
     updatedAt: now
   });
 
-  const projectService = new ProjectService(projectRepository, taskRepository, () => now);
+  const projectService = new ProjectService(projectRepository, taskRepository, contextRepository, () => now);
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
 
   return createTaskManagerToolset({

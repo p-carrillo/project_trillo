@@ -34,6 +34,9 @@ export interface TaskMigrationOptions {
   developmentOwnerUserId?: string | null;
 }
 
+const DEFAULT_CONTEXT_NAME = 'Personal';
+const DEFAULT_CONTEXT_DESCRIPTION = 'Default context for migrated projects.';
+
 const DEVELOPMENT_PROJECT_FIXTURES: readonly ProjectFixture[] = [
   {
     id: 'project-orbital-ops',
@@ -390,6 +393,38 @@ export async function runTaskMigrations(
   }
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS contexts (
+      id VARCHAR(64) PRIMARY KEY,
+      owner_user_id CHAR(36) NOT NULL,
+      name VARCHAR(120) NOT NULL,
+      description TEXT NULL,
+      created_at DATETIME(3) NOT NULL,
+      updated_at DATETIME(3) NOT NULL,
+      UNIQUE KEY uk_contexts_owner_name (owner_user_id, name),
+      INDEX idx_contexts_owner_user_id (owner_user_id)
+    )
+  `);
+
+  if (!(await hasForeignKey(pool, 'contexts', 'fk_contexts_owner_user_id_users'))) {
+    await pool.query(`
+      ALTER TABLE contexts
+      ADD CONSTRAINT fk_contexts_owner_user_id_users
+      FOREIGN KEY (owner_user_id) REFERENCES users(id)
+      ON UPDATE CASCADE
+      ON DELETE RESTRICT
+    `);
+  }
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_contexts (
+      project_id VARCHAR(64) NOT NULL,
+      context_id VARCHAR(64) NOT NULL,
+      PRIMARY KEY (project_id, context_id),
+      INDEX idx_project_contexts_context_id (context_id)
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id CHAR(36) PRIMARY KEY,
       board_id VARCHAR(64) NOT NULL,
@@ -467,6 +502,26 @@ export async function runTaskMigrations(
     `);
   }
 
+  if (!(await hasForeignKey(pool, 'project_contexts', 'fk_project_contexts_project_id_projects'))) {
+    await pool.query(`
+      ALTER TABLE project_contexts
+      ADD CONSTRAINT fk_project_contexts_project_id_projects
+      FOREIGN KEY (project_id) REFERENCES projects(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE
+    `);
+  }
+
+  if (!(await hasForeignKey(pool, 'project_contexts', 'fk_project_contexts_context_id_contexts'))) {
+    await pool.query(`
+      ALTER TABLE project_contexts
+      ADD CONSTRAINT fk_project_contexts_context_id_contexts
+      FOREIGN KEY (context_id) REFERENCES contexts(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE
+    `);
+  }
+
   const [rows] = await pool.query<CountRow[]>(
     `SELECT COUNT(*) AS total FROM tasks WHERE board_id = 'project-alpha'`
   );
@@ -519,6 +574,8 @@ export async function runTaskMigrations(
   if (options.enableDevelopmentFixtures && options.developmentOwnerUserId) {
     await ensureDevelopmentFixtures(pool, options.developmentOwnerUserId);
   }
+
+  await ensureProjectContextBackfill(pool);
 }
 
 function normalizeOptions(input: string | TaskMigrationOptions): TaskMigrationOptions {
@@ -603,6 +660,36 @@ async function ensureDevelopmentTasks(pool: Pool): Promise<void> {
       id = id
     `,
     parameters
+  );
+}
+
+async function ensureProjectContextBackfill(pool: Pool): Promise<void> {
+  await pool.query(
+    `
+    INSERT INTO contexts (id, owner_user_id, name, description, created_at, updated_at)
+    SELECT UUID(), p.owner_user_id, ?, ?, NOW(3), NOW(3)
+    FROM projects p
+    LEFT JOIN contexts c
+      ON c.owner_user_id = p.owner_user_id
+      AND c.name = ?
+    WHERE c.id IS NULL
+    GROUP BY p.owner_user_id
+    `,
+    [DEFAULT_CONTEXT_NAME, DEFAULT_CONTEXT_DESCRIPTION, DEFAULT_CONTEXT_NAME]
+  );
+
+  await pool.query(
+    `
+    INSERT INTO project_contexts (project_id, context_id)
+    SELECT p.id, c.id
+    FROM projects p
+    INNER JOIN contexts c
+      ON c.owner_user_id = p.owner_user_id
+      AND c.name = ?
+    LEFT JOIN project_contexts pc ON pc.project_id = p.id
+    WHERE pc.project_id IS NULL
+    `,
+    [DEFAULT_CONTEXT_NAME]
   );
 }
 

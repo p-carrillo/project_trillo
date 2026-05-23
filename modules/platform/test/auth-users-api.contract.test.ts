@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createPlatformServer } from '../application';
-import { ProjectService, TaskService } from '../../tasks/application';
+import { ContextService, ProjectService, TaskService } from '../../tasks/application';
+import { InMemoryContextRepository } from '../../tasks/test/helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
 import { AuthService, UserService } from '../../users/application';
@@ -162,6 +163,7 @@ describe('Auth and users API contract', () => {
 });
 
 async function createTestServer() {
+  const contextRepository = new InMemoryContextRepository();
   const projectRepository = new InMemoryProjectRepository();
   const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const userRepository = new InMemoryUserRepository();
@@ -169,12 +171,14 @@ async function createTestServer() {
   const tokenService = new FakeAccessTokenService();
   const now = new Date('2026-02-17T10:00:00.000Z');
 
-  const projectService = new ProjectService(projectRepository, taskRepository, () => now);
+  const contextService = new ContextService(contextRepository, projectRepository, () => now);
+  const projectService = new ProjectService(projectRepository, taskRepository, contextRepository, () => now);
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
 
   const server = await createPlatformServer({
+    contextService,
     projectService,
     taskService,
     authService,

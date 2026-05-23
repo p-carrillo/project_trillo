@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import {
+  ContextNotFoundError,
+  InvalidProjectContextSelectionError,
   InvalidProjectOrderError,
+  normalizeContextId,
   normalizeProjectDescription,
   normalizeProjectName,
   ProjectNameTakenError,
   ProjectNotFoundError,
+  type ContextRepository,
   type Project,
   type ProjectRepository,
   type TaskRepository
@@ -13,21 +17,35 @@ import {
 export interface CreateProjectInput {
   name: string;
   description?: string | null;
+  contextIds?: string[];
 }
 
 export interface UpdateProjectInput {
   name?: string;
   description?: string | null;
+  contextIds?: string[];
 }
 
 export class ProjectService {
   constructor(
     private readonly repository: ProjectRepository,
     private readonly taskRepository: TaskRepository,
+    private readonly contextRepository: ContextRepository,
     private readonly now: () => Date = () => new Date()
   ) {}
 
-  async listProjects(userId: string): Promise<Project[]> {
+  async listProjects(userId: string, contextId?: string): Promise<Project[]> {
+    if (typeof contextId === 'string') {
+      const normalizedContextId = normalizeContextId(contextId);
+      const context = await this.contextRepository.findById(normalizedContextId, userId);
+
+      if (!context) {
+        throw new ContextNotFoundError(normalizedContextId);
+      }
+
+      return this.repository.listByOwner(userId, normalizedContextId);
+    }
+
     return this.repository.listByOwner(userId);
   }
 
@@ -40,6 +58,7 @@ export class ProjectService {
       throw new ProjectNameTakenError(name);
     }
 
+    const contextIds = await this.resolveContextIds(userId, input.contextIds);
     const currentProjects = await this.repository.listByOwner(userId);
     const createdAt = this.now();
 
@@ -48,6 +67,7 @@ export class ProjectService {
       ownerUserId: userId,
       name,
       description,
+      contextIds,
       sortOrder: currentProjects.length,
       createdAt,
       updatedAt: createdAt
@@ -63,11 +83,15 @@ export class ProjectService {
 
     const hasName = Object.prototype.hasOwnProperty.call(input, 'name');
     const hasDescription = Object.prototype.hasOwnProperty.call(input, 'description');
+    const hasContextIds = Object.prototype.hasOwnProperty.call(input, 'contextIds');
 
     const nextName = hasName ? normalizeProjectName(input.name ?? '') : current.name;
     const nextDescription = hasDescription
       ? normalizeProjectDescription(input.description)
       : current.description;
+    const nextContextIds = hasContextIds
+      ? await this.resolveContextIds(userId, input.contextIds)
+      : current.contextIds;
 
     if (nextName !== current.name) {
       const projectWithName = await this.repository.findByName(nextName, userId);
@@ -82,7 +106,8 @@ export class ProjectService {
       userId,
       {
         name: nextName,
-        description: nextDescription
+        description: nextDescription,
+        contextIds: nextContextIds
       },
       this.now()
     );
@@ -122,5 +147,38 @@ export class ProjectService {
     await this.repository.reorderByOwner(userId, projectIds, this.now());
 
     return this.repository.listByOwner(userId);
+  }
+
+  private async resolveContextIds(userId: string, contextIds?: string[]): Promise<string[]> {
+    if (contextIds === undefined) {
+      const ensured = await this.contextRepository.ensureDefaultContext(userId, this.now());
+      return [ensured.id];
+    }
+
+    const normalizedContextIds = Array.from(
+      new Set(
+        contextIds.map((contextId) => {
+          if (typeof contextId !== 'string') {
+            throw new InvalidProjectContextSelectionError('contextIds must contain context id strings.');
+          }
+
+          return normalizeContextId(contextId);
+        })
+      )
+    );
+
+    if (normalizedContextIds.length === 0) {
+      throw new InvalidProjectContextSelectionError();
+    }
+
+    const contexts = await this.contextRepository.findByIds(userId, normalizedContextIds);
+
+    if (contexts.length !== normalizedContextIds.length) {
+      const foundIds = new Set(contexts.map((context) => context.id));
+      const missingId = normalizedContextIds.find((contextId) => !foundIds.has(contextId));
+      throw new ContextNotFoundError(missingId ?? normalizedContextIds[0] ?? 'unknown-context');
+    }
+
+    return normalizedContextIds;
   }
 }

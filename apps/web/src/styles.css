@@ -243,6 +243,72 @@ select {
   letter-spacing: 0.02em;
 }
 
+.context-switcher {
+  background: #ffffff;
+  border-color: #111111;
+  box-shadow: inset 0 0 0 1px #ffffff, 0 0 0 1px rgba(0, 0, 0, 0.42);
+  position: relative;
+}
+
+.context-switcher::before {
+  content: '';
+  position: absolute;
+  left: 0.22rem;
+  top: 0.26rem;
+  bottom: 0.26rem;
+  width: 2px;
+  background: #111111;
+}
+
+.context-switcher-text {
+  display: grid;
+  gap: 0.04rem;
+  padding-left: 0.4rem;
+  min-width: 0;
+}
+
+.context-switcher-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #4d525c;
+}
+
+.context-switcher p {
+  color: #101216;
+  font-weight: 700;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-switcher .project-add-btn {
+  border-color: #111111;
+  color: #111111;
+}
+
+.context-switcher .project-add-btn:hover {
+  background: #111111;
+  color: #ffffff;
+}
+
+.context-switcher .switcher-options-btn {
+  color: #111111;
+}
+
+.context-switcher .switcher-options-btn:hover {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.switcher-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
 .project-add-btn {
   width: 1.5rem;
   height: 1.5rem;
@@ -252,6 +318,12 @@ select {
   color: var(--text-on-dark-soft);
   line-height: 1;
   cursor: pointer;
+}
+
+.switcher-options-btn {
+  min-width: 1.5rem;
+  width: 1.5rem;
+  padding: 0.25rem;
 }
 
 .project-create-form {
@@ -296,6 +368,26 @@ select {
 .project-create-actions .primary-btn {
   box-shadow: none;
   padding: 0.35rem 0.55rem;
+}
+
+.context-dropdown {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.45rem;
+}
+
+.context-dropdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.context-dropdown-head p {
+  color: var(--text-on-dark-soft);
+  font-size: 0.86rem;
 }
 
 .projects-empty {
@@ -963,6 +1055,35 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 0.38rem;
+}
+
+.context-multi-select {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.context-checkbox {
+  border: 1px solid var(--border-soft);
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.context-checkbox--active {
+  border-color: #101216;
+  background: #f3f4f6;
+}
+
+.context-checkbox input {
+  margin: 0;
+}
+
+.context-empty {
+  color: var(--text-soft);
+  font-size: 0.86rem;
 }
 
 .form-tag-option {
