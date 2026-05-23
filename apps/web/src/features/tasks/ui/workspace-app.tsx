@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { taskStatuses, type CreateTaskRequest, type ProjectDto, type TaskDto, type TaskStatus, type UpdateTaskRequest } from '@trillo/contracts';
+import {
+  taskStatuses,
+  type ContextDto,
+  type CreateTaskRequest,
+  type ProjectDto,
+  type TaskDto,
+  type TaskStatus,
+  type UpdateTaskRequest
+} from '@trillo/contracts';
+import {
+  createContext as createContextRecord,
+  deleteContext as deleteContextRecord,
+  fetchContexts,
+  isContextApiError,
+  updateContext as updateContextRecord
+} from '../api/context-api';
 import {
   createTask,
   deleteTask,
@@ -26,11 +41,13 @@ import { AppSidebar } from './app-sidebar';
 import { BoardHeader } from './board-header';
 import { TaskBoard } from './task-board';
 import { CreateTaskPanel } from './create-task-panel';
+import { EditContextPanel } from './edit-context-panel';
 import { EditProjectPanel } from './edit-project-panel';
 import { ConfirmActionDialog } from './confirm-action-dialog';
 import { EpicTabs } from './epic-tabs';
 
-const ACTIVE_PROJECT_STORAGE_KEY = 'trillo.active-project.v1';
+const ACTIVE_CONTEXT_STORAGE_KEY = 'trillo.active-context.v1';
+const ACTIVE_PROJECT_STORAGE_KEY_PREFIX = 'trillo.active-project.v2.';
 const CUSTOM_COLUMNS_STORAGE_KEY_PREFIX = 'trillo.custom-columns.v2.';
 const COLUMN_LABELS_STORAGE_KEY_PREFIX = 'trillo.column-label-overrides.v1.';
 const COLUMN_ORDER_STORAGE_KEY_PREFIX = 'trillo.column-order.v1.';
@@ -44,9 +61,21 @@ interface CustomColumn {
 interface ProjectFormState {
   name: string;
   description: string;
+  contextIds: string[];
+}
+
+interface ContextFormState {
+  name: string;
+  description: string;
+  projectIds: string[];
 }
 
 type DeleteTarget =
+  | {
+      type: 'context';
+      id: string;
+      name: string;
+    }
   | {
       type: 'project';
       id: string;
@@ -67,21 +96,31 @@ interface WorkspaceAppProps {
 }
 
 export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }: WorkspaceAppProps) {
+  const [contexts, setContexts] = useState<ContextDto[]>([]);
+  const [selectedContextId, setSelectedContextId] = useState<string | null>(() => loadActiveContextId());
   const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => loadActiveProjectId());
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [searchText, setSearchText] = useState('');
-  const [form, setForm] = useState<CreateTaskRequest>(() => createInitialForm(loadActiveProjectId()));
+  const [form, setForm] = useState<CreateTaskRequest>(() => createInitialForm(null));
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
   const [selectedEpicId, setSelectedEpicId] = useState('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
+  const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingContextId, setEditingContextId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [contextForm, setContextForm] = useState<ContextFormState>({
+    name: '',
+    description: '',
+    projectIds: []
+  });
   const [projectForm, setProjectForm] = useState<ProjectFormState>({
     name: '',
-    description: ''
+    description: '',
+    contextIds: []
   });
   const [columnLabelOverrides, setColumnLabelOverrides] = useState<ColumnLabelOverrides>({});
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
@@ -90,6 +129,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   const [isSubmittingTask, setIsSubmittingTask] = useState(false);
   const [isCreatingEpicLinkedTask, setIsCreatingEpicLinkedTask] = useState(false);
   const [unlinkingEpicLinkedTaskIds, setUnlinkingEpicLinkedTaskIds] = useState<string[]>([]);
+  const [isSubmittingContext, setIsSubmittingContext] = useState(false);
+  const [isDeletingContextId, setIsDeletingContextId] = useState<string | null>(null);
+  const [isLoadingContextProjects, setIsLoadingContextProjects] = useState(false);
+  const [contextPanelProjects, setContextPanelProjects] = useState<ProjectDto[]>([]);
+  const [isCreatingContext, setIsCreatingContext] = useState(false);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isDeletingProjectId, setIsDeletingProjectId] = useState<string | null>(null);
@@ -101,21 +145,66 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
+  const selectedContext = useMemo(
+    () => contexts.find((context) => context.id === selectedContextId) ?? null,
+    [contexts, selectedContextId]
+  );
   const editingProject = useMemo(
     () => projects.find((project) => project.id === editingProjectId) ?? null,
     [editingProjectId, projects]
   );
+  const contextProjectsInPanel = useMemo(() => {
+    if (!editingContextId) {
+      return [];
+    }
+
+    return contextPanelProjects.map((project) => {
+      const isSelected = contextForm.projectIds.includes(project.id);
+      if (!isSelected) {
+        return null;
+      }
+
+      const hasPersistedMembership = project.contextIds.includes(editingContextId);
+      const isOnlyContextForProject = hasPersistedMembership && project.contextIds.length === 1;
+
+      return {
+        id: project.id,
+        name: project.name,
+        canRemove: !isOnlyContextForProject
+      };
+    }).filter((project): project is { id: string; name: string; canRemove: boolean } => Boolean(project));
+  }, [contextForm.projectIds, contextPanelProjects, editingContextId]);
+  const availableProjectsForContextPanel = useMemo(
+    () => contextPanelProjects.filter((project) => !contextForm.projectIds.includes(project.id)),
+    [contextForm.projectIds, contextPanelProjects]
+  );
   const activeProjectName = selectedProject?.name ?? 'Select a project';
-  const isAnyPanelOpen = isCreatePanelOpen || isProjectPanelOpen;
-  const panelCloseLabel = isProjectPanelOpen ? 'Close edit project panel' : 'Close create task panel';
-  const confirmDialogTitle = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
+  const isAnyPanelOpen = isCreatePanelOpen || isProjectPanelOpen || isContextPanelOpen;
+  const panelCloseLabel = isProjectPanelOpen
+    ? 'Close edit project panel'
+    : isContextPanelOpen
+      ? 'Close edit context panel'
+      : 'Close create task panel';
+  const confirmDialogTitle =
+    deleteTarget?.type === 'context'
+      ? 'Delete context'
+      : deleteTarget?.type === 'project'
+        ? 'Delete project'
+        : 'Delete task';
   const confirmDialogMessage =
-    deleteTarget?.type === 'project'
-      ? `Delete project "${deleteTarget.name}"? This will remove all tasks, epics and board data from this project.`
-      : deleteTarget
-        ? `Delete task "${deleteTarget.title}"?`
-        : '';
-  const confirmDialogActionLabel = deleteTarget?.type === 'project' ? 'Delete project' : 'Delete task';
+    deleteTarget?.type === 'context'
+      ? `Delete context "${deleteTarget.name}"? Projects assigned only to this context will be moved to another context.`
+      : deleteTarget?.type === 'project'
+        ? `Delete project "${deleteTarget.name}"? This will remove all tasks, epics and board data from this project.`
+        : deleteTarget
+          ? `Delete task "${deleteTarget.title}"?`
+          : '';
+  const confirmDialogActionLabel =
+    deleteTarget?.type === 'context'
+      ? 'Delete context'
+      : deleteTarget?.type === 'project'
+        ? 'Delete project'
+        : 'Delete task';
 
   const normalizedTasks = useMemo(() => tasks.map((task) => normalizeTaskDto(task)), [tasks]);
   const epics = useMemo(
@@ -181,8 +270,20 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }, [editingTask, editingTaskId, form.taskType]);
 
   useEffect(() => {
-    void initializeProjects();
+    void initializeContexts();
   }, []);
+
+  useEffect(() => {
+    if (!selectedContextId) {
+      setProjects([]);
+      setSelectedProjectId(null);
+      setTasks([]);
+      setForm(createInitialForm(null));
+      return;
+    }
+
+    void loadProjectsForContext(selectedContextId);
+  }, [selectedContextId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -192,6 +293,9 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     const projectExists = projects.some((project) => project.id === selectedProjectId);
     if (!projectExists) {
+      const fallbackProjectId = projects[0]?.id ?? null;
+      setSelectedProjectId(fallbackProjectId);
+      setTasks([]);
       return;
     }
 
@@ -212,13 +316,26 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }, [selectedProjectId]);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      saveActiveProjectId(selectedProjectId);
+    if (selectedContextId) {
+      saveActiveContextId(selectedContextId);
       return;
     }
 
-    clearActiveProjectId();
-  }, [selectedProjectId]);
+    clearActiveContextId();
+  }, [selectedContextId]);
+
+  useEffect(() => {
+    if (!selectedContextId) {
+      return;
+    }
+
+    if (selectedProjectId) {
+      saveActiveProjectId(selectedContextId, selectedProjectId);
+      return;
+    }
+
+    clearActiveProjectId(selectedContextId);
+  }, [selectedContextId, selectedProjectId]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -270,6 +387,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
         return;
       }
 
+      if (isContextPanelOpen) {
+        handleCloseContextPanel();
+        return;
+      }
+
       if (isSidebarOpen) {
         setIsSidebarOpen(false);
       }
@@ -280,7 +402,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     return () => {
       window.removeEventListener('keydown', handleEscape);
     };
-  }, [deleteTarget, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen]);
+  }, [deleteTarget, isContextPanelOpen, isCreatePanelOpen, isProjectPanelOpen, isSidebarOpen]);
 
   useEffect(() => {
     const hasOpenOverlay = Boolean(deleteTarget) || isAnyPanelOpen || isSidebarOpen;
@@ -311,19 +433,46 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setErrorMessage(mapErrorMessage(error));
   }
 
-  async function initializeProjects() {
+  async function initializeContexts() {
     setIsLoadingProjects(true);
     setErrorMessage(null);
 
     try {
-      const nextProjects = await fetchProjects();
+      const nextContexts = await fetchContexts();
+      setContexts(nextContexts);
+
+      const nextSelectedContextId = resolveSelectedContextId(nextContexts, selectedContextId);
+      setSelectedContextId(nextSelectedContextId);
+
+      if (!nextSelectedContextId) {
+        setProjects([]);
+        setSelectedProjectId(null);
+        setForm(createInitialForm(null));
+      }
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
+  async function loadProjectsForContext(contextId: string) {
+    setIsLoadingProjects(true);
+    setErrorMessage(null);
+
+    try {
+      const nextProjects = await fetchProjects(contextId);
       setProjects(nextProjects);
 
-      const nextSelectedProjectId = resolveSelectedProjectId(nextProjects, selectedProjectId);
+      const preferredProjectId = loadActiveProjectId(contextId);
+      const nextSelectedProjectId = resolveSelectedProjectId(nextProjects, preferredProjectId);
       setSelectedProjectId(nextSelectedProjectId);
       setForm(createInitialForm(nextSelectedProjectId));
     } catch (error) {
       handleUiError(error);
+      setProjects([]);
+      setSelectedProjectId(null);
+      setForm(createInitialForm(null));
     } finally {
       setIsLoadingProjects(false);
     }
@@ -345,11 +494,15 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   async function handleCreateProject(name: string) {
+    if (!selectedContextId) {
+      return;
+    }
+
     setIsCreatingProject(true);
     setErrorMessage(null);
 
     try {
-      const createdProject = await createProjectRecord({ name });
+      const createdProject = await createProjectRecord({ name, contextIds: [selectedContextId] });
       setProjects((current) => [...current, createdProject]);
       handleSelectProject(createdProject.id);
     } catch (error) {
@@ -357,6 +510,22 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       throw error;
     } finally {
       setIsCreatingProject(false);
+    }
+  }
+
+  async function handleCreateContext(name: string) {
+    setIsCreatingContext(true);
+    setErrorMessage(null);
+
+    try {
+      const createdContext = await createContextRecord({ name });
+      setContexts((current) => [...current, createdContext]);
+      handleSelectContext(createdContext.id);
+    } catch (error) {
+      handleUiError(error);
+      throw error;
+    } finally {
+      setIsCreatingContext(false);
     }
   }
 
@@ -384,6 +553,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function handleOpenProjectPanel(projectId: string) {
+    if (isProjectPanelOpen && editingProjectId === projectId) {
+      handleCloseProjectPanel();
+      return;
+    }
+
     const project = projects.find((item) => item.id === projectId);
     if (!project) {
       return;
@@ -392,11 +566,14 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setErrorMessage(null);
     setIsSidebarOpen(false);
     setIsCreatePanelOpen(false);
+    setIsContextPanelOpen(false);
+    resetContextFormState();
     setEditingTaskId(null);
     setEditingProjectId(project.id);
     setProjectForm({
       name: project.name,
-      description: project.description ?? ''
+      description: project.description ?? '',
+      contextIds: [...project.contextIds]
     });
     setIsProjectPanelOpen(true);
   }
@@ -406,6 +583,20 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       ...current,
       [field]: value
     }));
+  }
+
+  function handleToggleProjectContext(contextId: string) {
+    setProjectForm((current) => {
+      const exists = current.contextIds.includes(contextId);
+      const nextContextIds = exists
+        ? current.contextIds.filter((item) => item !== contextId)
+        : [...current.contextIds, contextId];
+
+      return {
+        ...current,
+        contextIds: nextContextIds
+      };
+    });
   }
 
   async function handleSubmitProjectUpdate(event: FormEvent<HTMLFormElement>) {
@@ -422,12 +613,17 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     const nextName = projectForm.name.trim();
     const nextDescription = normalizeProjectDescription(projectForm.description);
+    const nextContextIds = Array.from(new Set(projectForm.contextIds));
 
     if (nextName.length === 0) {
       return;
     }
 
-    if (project.name === nextName && project.description === nextDescription) {
+    if (
+      project.name === nextName &&
+      project.description === nextDescription &&
+      isStringArrayEqual(project.contextIds, nextContextIds)
+    ) {
       handleCloseProjectPanel();
       return;
     }
@@ -438,10 +634,17 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     try {
       const updated = await updateProjectRecord(editingProjectId, {
         name: nextName,
-        description: nextDescription
+        description: nextDescription,
+        contextIds: nextContextIds
       });
 
-      setProjects((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setProjects((current) => {
+        if (selectedContextId && !updated.contextIds.includes(selectedContextId)) {
+          return current.filter((item) => item.id !== updated.id);
+        }
+
+        return current.map((item) => (item.id === updated.id ? updated : item));
+      });
       handleCloseProjectPanel();
     } catch (error) {
       handleUiError(error);
@@ -463,6 +666,19 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     });
   }
 
+  function handleRequestDeleteContext(contextId: string) {
+    const context = contexts.find((item) => item.id === contextId);
+    if (!context) {
+      return;
+    }
+
+    setDeleteTarget({
+      type: 'context',
+      id: context.id,
+      name: context.name
+    });
+  }
+
   function handleRequestDeleteTask(task: TaskDto) {
     setDeleteTarget({
       type: 'task',
@@ -481,7 +697,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     try {
       const deleted =
-        target.type === 'project' ? await performDeleteProject(target.id) : await performDeleteTask(target.id);
+        target.type === 'context'
+          ? await performDeleteContext(target.id)
+          : target.type === 'project'
+            ? await performDeleteProject(target.id)
+            : await performDeleteTask(target.id);
 
       if (deleted) {
         setDeleteTarget(null);
@@ -532,6 +752,40 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       return false;
     } finally {
       setIsDeletingProjectId(null);
+    }
+  }
+
+  async function performDeleteContext(contextId: string): Promise<boolean> {
+    const context = contexts.find((item) => item.id === contextId);
+    if (!context) {
+      return false;
+    }
+
+    setIsDeletingContextId(contextId);
+    setErrorMessage(null);
+
+    try {
+      await deleteContextRecord(contextId);
+      const nextContexts = contexts.filter((item) => item.id !== contextId);
+      setContexts(nextContexts);
+
+      if (editingContextId === contextId) {
+        setIsContextPanelOpen(false);
+        resetContextFormState();
+      }
+
+      if (selectedContextId === contextId) {
+        setSelectedContextId(nextContexts[0]?.id ?? null);
+      } else if (selectedContextId) {
+        await loadProjectsForContext(selectedContextId);
+      }
+
+      return true;
+    } catch (error) {
+      handleUiError(error);
+      return false;
+    } finally {
+      setIsDeletingContextId(null);
     }
   }
 
@@ -687,7 +941,9 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     setErrorMessage(null);
     setIsSidebarOpen(false);
+    setIsContextPanelOpen(false);
     setIsProjectPanelOpen(false);
+    resetContextFormState();
     resetProjectFormState();
     setEditingTaskId(task.id);
     setForm({
@@ -711,7 +967,9 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setErrorMessage(null);
     setIsSidebarOpen(false);
     setIsCreatePanelOpen(false);
+    setIsContextPanelOpen(false);
     setIsProjectPanelOpen(false);
+    resetContextFormState();
     resetProjectFormState();
     setSearchText('');
     setSelectedEpicId('all');
@@ -719,6 +977,206 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setTasks([]);
     setSelectedProjectId(projectId);
     setForm(createInitialForm(projectId));
+  }
+
+  function handleSelectContext(contextId: string) {
+    if (contextId === selectedContextId) {
+      setIsSidebarOpen(false);
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSidebarOpen(false);
+    setIsCreatePanelOpen(false);
+    setIsContextPanelOpen(false);
+    setIsProjectPanelOpen(false);
+    resetContextFormState();
+    resetProjectFormState();
+    setSearchText('');
+    setSelectedEpicId('all');
+    setEditingTaskId(null);
+    setTasks([]);
+    setSelectedContextId(contextId);
+  }
+
+  function handleOpenContextPanel(contextId: string) {
+    if (isContextPanelOpen && editingContextId === contextId) {
+      handleCloseContextPanel();
+      return;
+    }
+
+    const context = contexts.find((item) => item.id === contextId);
+    if (!context) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsSidebarOpen(false);
+    setIsCreatePanelOpen(false);
+    setIsProjectPanelOpen(false);
+    resetProjectFormState();
+    setEditingTaskId(null);
+    setEditingContextId(context.id);
+    setContextForm({
+      name: context.name,
+      description: context.description ?? '',
+      projectIds: []
+    });
+    void loadContextProjectsForPanel(context.id);
+    setIsContextPanelOpen(true);
+  }
+
+  async function loadContextProjectsForPanel(contextId: string) {
+    setIsLoadingContextProjects(true);
+    setErrorMessage(null);
+
+    try {
+      const allProjects = await fetchProjects();
+      setContextPanelProjects(allProjects);
+      setContextForm((current) => ({
+        ...current,
+        projectIds: allProjects.filter((project) => project.contextIds.includes(contextId)).map((project) => project.id)
+      }));
+    } catch (error) {
+      handleUiError(error);
+      setContextPanelProjects([]);
+      setContextForm((current) => ({
+        ...current,
+        projectIds: []
+      }));
+    } finally {
+      setIsLoadingContextProjects(false);
+    }
+  }
+
+  function handleUpdateContextField(field: keyof ContextFormState, value: string) {
+    setContextForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function handleAddProjectToContext(projectId: string) {
+    setContextForm((current) => {
+      if (current.projectIds.includes(projectId)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        projectIds: [...current.projectIds, projectId]
+      };
+    });
+  }
+
+  function handleRemoveProjectFromContext(projectId: string) {
+    setContextForm((current) => {
+      if (!current.projectIds.includes(projectId)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        projectIds: current.projectIds.filter((item) => item !== projectId)
+      };
+    });
+  }
+
+  async function handleSubmitContextUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingContextId) {
+      return;
+    }
+
+    const context = contexts.find((item) => item.id === editingContextId);
+    if (!context) {
+      return;
+    }
+
+    const nextName = contextForm.name.trim();
+    const nextDescription = normalizeProjectDescription(contextForm.description);
+    const nextProjectIds = Array.from(new Set(contextForm.projectIds));
+    const projectIdsBefore = contextPanelProjects
+      .filter((project) => project.contextIds.includes(editingContextId))
+      .map((project) => project.id);
+    const isContextDetailsUnchanged = context.name === nextName && context.description === nextDescription;
+    const areProjectMembershipsUnchanged = isStringArrayEqual(
+      [...projectIdsBefore].sort(),
+      [...nextProjectIds].sort()
+    );
+
+    if (nextName.length === 0) {
+      return;
+    }
+
+    if (isContextDetailsUnchanged && areProjectMembershipsUnchanged) {
+      handleCloseContextPanel();
+      return;
+    }
+
+    setIsSubmittingContext(true);
+    setErrorMessage(null);
+
+    try {
+      const contextUpdatePromise = isContextDetailsUnchanged
+        ? Promise.resolve(context)
+        : updateContextRecord(editingContextId, {
+            name: nextName,
+            description: nextDescription
+          });
+      const contextMembershipChanges = contextPanelProjects
+        .map((project) => {
+          const hasContext = project.contextIds.includes(editingContextId);
+          const shouldHaveContext = nextProjectIds.includes(project.id);
+
+          if (hasContext === shouldHaveContext) {
+            return null;
+          }
+
+          const nextContextIds = shouldHaveContext
+            ? [...project.contextIds, editingContextId]
+            : project.contextIds.filter((item) => item !== editingContextId);
+
+          if (nextContextIds.length === 0) {
+            return null;
+          }
+
+          return {
+            projectId: project.id,
+            contextIds: nextContextIds
+          };
+        })
+        .filter(
+          (
+            item
+          ): item is {
+            projectId: string;
+            contextIds: string[];
+          } => Boolean(item)
+        );
+
+      await Promise.all(
+        contextMembershipChanges.map((change) =>
+          updateProjectRecord(change.projectId, {
+            contextIds: change.contextIds
+          })
+        )
+      );
+
+      const updated = await contextUpdatePromise;
+      setContexts((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+
+      if (selectedContextId) {
+        await loadProjectsForContext(selectedContextId);
+      }
+
+      handleCloseContextPanel();
+    } catch (error) {
+      handleUiError(error);
+    } finally {
+      setIsSubmittingContext(false);
+    }
   }
 
   function handleUpdateFormField<Key extends keyof CreateTaskRequest>(key: Key, value: CreateTaskRequest[Key]) {
@@ -735,8 +1193,10 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
   function handleToggleSidebar() {
     setIsCreatePanelOpen(false);
+    setIsContextPanelOpen(false);
     setIsProjectPanelOpen(false);
     setEditingTaskId(null);
+    resetContextFormState();
     resetProjectFormState();
     setIsSidebarOpen((current) => !current);
   }
@@ -747,7 +1207,9 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }
 
     setIsSidebarOpen(false);
+    setIsContextPanelOpen(false);
     setIsProjectPanelOpen(false);
+    resetContextFormState();
     resetProjectFormState();
     resetFormState(selectedProjectId);
     setIsCreatePanelOpen(true);
@@ -763,7 +1225,17 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     resetProjectFormState();
   }
 
+  function handleCloseContextPanel() {
+    setIsContextPanelOpen(false);
+    resetContextFormState();
+  }
+
   function handleCloseActivePanel() {
+    if (isContextPanelOpen) {
+      handleCloseContextPanel();
+      return;
+    }
+
     if (isProjectPanelOpen) {
       handleCloseProjectPanel();
       return;
@@ -843,7 +1315,18 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setEditingProjectId(null);
     setProjectForm({
       name: '',
-      description: ''
+      description: '',
+      contextIds: []
+    });
+  }
+
+  function resetContextFormState() {
+    setEditingContextId(null);
+    setContextPanelProjects([]);
+    setContextForm({
+      name: '',
+      description: '',
+      projectIds: []
     });
   }
 
@@ -858,11 +1341,17 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
         <AppSidebar
           isOpen={isSidebarOpen}
           username={username}
+          contexts={contexts}
+          selectedContextId={selectedContextId}
           projects={projects}
           selectedProjectId={selectedProjectId}
+          isCreatingContext={isCreatingContext}
           isCreatingProject={isCreatingProject}
           isDeletingProjectId={isDeletingProjectId}
           onClose={() => setIsSidebarOpen(false)}
+          onSelectContext={handleSelectContext}
+          onCreateContext={handleCreateContext}
+          onOpenContextPanel={handleOpenContextPanel}
           onSelectProject={handleSelectProject}
           onCreateProject={handleCreateProject}
           onReorderProject={(sourceProjectId, targetProjectId) => {
@@ -877,7 +1366,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
           isSidebarOpen={isSidebarOpen}
           projectName={activeProjectName}
           searchText={searchText}
-          canCreateTask={Boolean(selectedProjectId)}
+          canCreateTask={Boolean(selectedProjectId && selectedContext)}
           onToggleSidebar={handleToggleSidebar}
           onSearchTextChange={setSearchText}
           onOpenCreatePanel={handleOpenCreatePanel}
@@ -908,6 +1397,8 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
             <section className="board-section" aria-label="Project board state">
               {isLoadingProjects ? (
                 <p className="status-line">Loading projects...</p>
+              ) : !selectedContextId ? (
+                <p className="status-line">Create a context from the sidebar to start using the workspace.</p>
               ) : (
                 <p className="status-line">Create a project from the sidebar to start using the board.</p>
               )}
@@ -950,14 +1441,37 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
                 }
               : {})}
           />
+          <EditContextPanel
+            isOpen={isContextPanelOpen}
+            isSubmitting={isSubmittingContext}
+            isDeleting={Boolean(editingContextId && isDeletingContextId === editingContextId)}
+            isLoadingProjects={isLoadingContextProjects}
+            form={contextForm}
+            projectsInContext={contextProjectsInPanel}
+            availableProjects={availableProjectsForContextPanel}
+            onClose={handleCloseContextPanel}
+            onSubmit={handleSubmitContextUpdate}
+            onUpdateField={handleUpdateContextField}
+            onAddProject={handleAddProjectToContext}
+            onRemoveProject={handleRemoveProjectFromContext}
+            onDeleteContext={() => {
+              if (!editingContextId) {
+                return;
+              }
+
+              handleRequestDeleteContext(editingContextId);
+            }}
+          />
           <EditProjectPanel
             isOpen={isProjectPanelOpen}
             isSubmitting={isSubmittingProject}
             isDeleting={Boolean(editingProjectId && isDeletingProjectId === editingProjectId)}
             form={projectForm}
+            contexts={contexts.map((context) => ({ id: context.id, name: context.name }))}
             onClose={handleCloseProjectPanel}
             onSubmit={handleSubmitProjectUpdate}
             onUpdateField={handleUpdateProjectField}
+            onToggleContext={handleToggleProjectContext}
             onDeleteProject={() => {
               if (!editingProject) {
                 return;
@@ -984,7 +1498,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 }
 
 function mapErrorMessage(error: unknown): string {
-  if (isTaskApiError(error) || isProjectApiError(error)) {
+  if (isTaskApiError(error) || isProjectApiError(error) || isContextApiError(error)) {
     return `${error.message} (${error.code})`;
   }
 
@@ -992,7 +1506,7 @@ function mapErrorMessage(error: unknown): string {
 }
 
 function isUnauthorizedApiError(error: unknown): boolean {
-  if (isTaskApiError(error) || isProjectApiError(error)) {
+  if (isTaskApiError(error) || isProjectApiError(error) || isContextApiError(error)) {
     return error.statusCode === 401;
   }
 
@@ -1038,6 +1552,18 @@ function createInitialForm(projectId: string | null): CreateTaskRequest {
     taskType: 'task',
     epicId: null
   };
+}
+
+function resolveSelectedContextId(contexts: ContextDto[], preferredContextId: string | null): string | null {
+  if (contexts.length === 0) {
+    return null;
+  }
+
+  if (preferredContextId && contexts.some((context) => context.id === preferredContextId)) {
+    return preferredContextId;
+  }
+
+  return contexts[0]?.id ?? null;
 }
 
 function resolveSelectedProjectId(projects: ProjectDto[], preferredProjectId: string | null): string | null {
@@ -1241,12 +1767,16 @@ function saveColumnOrder(projectId: string, columnOrder: string[]) {
   }
 }
 
-function loadActiveProjectId(): string | null {
+function createActiveProjectStorageKey(contextId: string): string {
+  return `${ACTIVE_PROJECT_STORAGE_KEY_PREFIX}${contextId}`;
+}
+
+function loadActiveContextId(): string | null {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  const raw = window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY);
+  const raw = window.localStorage.getItem(ACTIVE_CONTEXT_STORAGE_KEY);
 
   if (!raw || raw.trim().length === 0) {
     return null;
@@ -1255,25 +1785,63 @@ function loadActiveProjectId(): string | null {
   return raw;
 }
 
-function saveActiveProjectId(projectId: string) {
+function saveActiveContextId(contextId: string) {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, projectId);
+    window.localStorage.setItem(ACTIVE_CONTEXT_STORAGE_KEY, contextId);
   } catch {
     // Ignore storage failures to keep UI usable.
   }
 }
 
-function clearActiveProjectId() {
+function clearActiveContextId() {
   if (typeof window === 'undefined') {
     return;
   }
 
   try {
-    window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
+    window.localStorage.removeItem(ACTIVE_CONTEXT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures to keep UI usable.
+  }
+}
+
+function loadActiveProjectId(contextId: string): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(createActiveProjectStorageKey(contextId));
+
+  if (!raw || raw.trim().length === 0) {
+    return null;
+  }
+
+  return raw;
+}
+
+function saveActiveProjectId(contextId: string, projectId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(createActiveProjectStorageKey(contextId), projectId);
+  } catch {
+    // Ignore storage failures to keep UI usable.
+  }
+}
+
+function clearActiveProjectId(contextId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(createActiveProjectStorageKey(contextId));
   } catch {
     // Ignore storage failures to keep UI usable.
   }

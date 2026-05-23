@@ -5,6 +5,7 @@ export interface Project {
   ownerUserId: string;
   name: string;
   description: string | null;
+  contextIds: string[];
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -15,6 +16,7 @@ export interface NewProject {
   ownerUserId: string;
   name: string;
   description: string | null;
+  contextIds: string[];
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +25,7 @@ export interface NewProject {
 export interface ProjectPatch {
   name: string;
   description: string | null;
+  contextIds: string[];
 }
 
 export function normalizeProjectId(rawProjectId: string): string {

@@ -106,6 +106,9 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
       description: 'List all projects.',
       inputSchema: {
         type: 'object',
+        properties: {
+          contextId: { type: 'string', minLength: 2, maxLength: 64 }
+        },
         additionalProperties: false
       }
     },
@@ -116,7 +119,11 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
         type: 'object',
         properties: {
           name: { type: 'string', minLength: 2, maxLength: 120 },
-          description: { type: 'string', nullable: true, maxLength: 4000 }
+          description: { type: 'string', nullable: true, maxLength: 4000 },
+          contextIds: {
+            type: 'array',
+            items: { type: 'string', minLength: 2, maxLength: 64 }
+          }
         },
         required: ['name'],
         additionalProperties: false
@@ -130,7 +137,11 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
         properties: {
           projectId: { type: 'string', minLength: 2, maxLength: 64 },
           name: { type: 'string', minLength: 2, maxLength: 120 },
-          description: { type: 'string', nullable: true, maxLength: 4000 }
+          description: { type: 'string', nullable: true, maxLength: 4000 },
+          contextIds: {
+            type: 'array',
+            items: { type: 'string', minLength: 2, maxLength: 64 }
+          }
         },
         required: ['projectId'],
         additionalProperties: false
@@ -224,8 +235,9 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
   ];
 
   const handlers: Record<ToolName, ToolHandler> = {
-      list_projects: async () => {
-        const projects = await dependencies.projectService.listProjects(dependencies.actorUserId);
+      list_projects: async (args) => {
+        const contextId = parseOptionalString(args.contextId, 'contextId');
+        const projects = await dependencies.projectService.listProjects(dependencies.actorUserId, contextId);
         return buildSuccessResult({
           data: projects.map(toProjectDto),
           meta: {
@@ -332,10 +344,15 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
 function parseCreateProjectArgs(args: ToolArgs): CreateProjectInput {
   const name = parseRequiredString(args.name, 'name');
   const description = parseOptionalStringOrNull(args.description, 'description');
+  const contextIds = parseOptionalStringArray(args.contextIds, 'contextIds');
   const payload: CreateProjectInput = { name };
 
   if (description !== undefined) {
     payload.description = description;
+  }
+
+  if (contextIds !== undefined) {
+    payload.contextIds = contextIds;
   }
 
   return payload;
@@ -356,9 +373,16 @@ function parseUpdateProjectArgs(args: ToolArgs): { projectId: string; payload: U
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(args, 'contextIds')) {
+    const contextIds = parseOptionalStringArray(args.contextIds, 'contextIds');
+    if (contextIds !== undefined) {
+      payload.contextIds = contextIds;
+    }
+  }
+
   if (Object.keys(payload).length === 0) {
     throw new ValidationError('Invalid request payload.', {
-      body: 'At least one field is required: name, description.'
+      body: 'At least one field is required: name, description, contextIds.'
     });
   }
 
@@ -547,11 +571,26 @@ function parseOptionalStringOrNull(value: unknown, field: string): string | null
   return value;
 }
 
+function parseOptionalStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ValidationError('Invalid request payload.', {
+      [field]: `${field} must be an array of strings.`
+    });
+  }
+
+  return value.map((item) => parseRequiredString(item, field));
+}
+
 function toProjectDto(project: Project) {
   return {
     id: project.id,
     name: project.name,
     description: project.description,
+    contextIds: project.contextIds,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString()
   };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ProjectService } from '../application';
+import { InMemoryContextRepository } from './helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from './helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from './helpers/in-memory-task-repository';
 
@@ -19,7 +20,7 @@ describe('ProjectService', () => {
     expect(projects.map((project) => project.name)).toEqual(['Project Alpha', 'Project Beta']);
   });
 
-  it('creates a project with normalized name', async () => {
+  it('creates a project with normalized name and default context', async () => {
     const { service } = createProjectService();
 
     const project = await service.createProject(USER_ALPHA, { name: '  Product   Roadmap  ' });
@@ -27,6 +28,7 @@ describe('ProjectService', () => {
     expect(project.name).toBe('Product Roadmap');
     expect(project.description).toBeNull();
     expect(project.ownerUserId).toBe(USER_ALPHA);
+    expect(project.contextIds.length).toBe(1);
     expect(project.sortOrder).toBe(0);
   });
 
@@ -125,6 +127,57 @@ describe('ProjectService', () => {
     expect(updated.description).toBe('Updated board scope.');
   });
 
+  it('updates project contexts and keeps at least one', async () => {
+    const { service, contextRepository } = createProjectService();
+    const now = new Date('2026-02-17T10:00:00.000Z');
+
+    const first = await contextRepository.ensureDefaultContext(USER_ALPHA, now);
+    const second = await contextRepository.create({
+      id: 'context-work',
+      ownerUserId: USER_ALPHA,
+      name: 'Work',
+      description: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const project = await service.createProject(USER_ALPHA, { name: 'Project Alpha', contextIds: [first.id] });
+
+    const updated = await service.updateProject(USER_ALPHA, project.id, {
+      contextIds: [first.id, second.id]
+    });
+
+    expect(updated.contextIds).toEqual([first.id, second.id]);
+
+    await expect(
+      service.updateProject(USER_ALPHA, project.id, {
+        contextIds: []
+      })
+    ).rejects.toMatchObject({ code: 'invalid_project_context_selection' });
+  });
+
+  it('filters projects by context', async () => {
+    const { service, contextRepository } = createProjectService();
+    const now = new Date('2026-02-17T10:00:00.000Z');
+
+    const shared = await contextRepository.ensureDefaultContext(USER_ALPHA, now);
+    const isolated = await contextRepository.create({
+      id: 'context-private',
+      ownerUserId: USER_ALPHA,
+      name: 'Private',
+      description: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const alpha = await service.createProject(USER_ALPHA, { name: 'Project Alpha', contextIds: [shared.id] });
+    await service.createProject(USER_ALPHA, { name: 'Project Beta', contextIds: [isolated.id] });
+
+    const filtered = await service.listProjects(USER_ALPHA, shared.id);
+
+    expect(filtered.map((project) => project.id)).toEqual([alpha.id]);
+  });
+
   it('returns project_not_found when updating unknown project', async () => {
     const { service } = createProjectService();
 
@@ -203,16 +256,19 @@ describe('ProjectService', () => {
 
 function createProjectService(): {
   service: ProjectService;
+  contextRepository: InMemoryContextRepository;
   projectRepository: InMemoryProjectRepository;
   taskRepository: InMemoryTaskRepository;
 } {
   const now = new Date('2026-02-17T10:00:00.000Z');
+  const contextRepository = new InMemoryContextRepository();
   const projectRepository = new InMemoryProjectRepository();
   const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
-  const service = new ProjectService(projectRepository, taskRepository, () => now);
+  const service = new ProjectService(projectRepository, taskRepository, contextRepository, () => now);
 
   return {
     service,
+    contextRepository,
     projectRepository,
     taskRepository
   };

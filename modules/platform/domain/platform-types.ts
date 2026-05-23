@@ -1,7 +1,8 @@
-import type { ProjectService, TaskService } from '../../tasks/application';
+import type { ContextService, ProjectService, TaskService } from '../../tasks/application';
 import type { AuthService, UserService } from '../../users/application';
 
 export interface PlatformDependencies {
+  contextService: ContextService;
   projectService: ProjectService;
   taskService: TaskService;
   authService: AuthService;

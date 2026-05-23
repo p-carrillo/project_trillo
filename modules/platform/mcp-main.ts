@@ -2,6 +2,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createPlatformMcpServer } from './application';
 import { createDatabasePool, loadMcpApiKey, loadPlatformConfig, type PlatformConfig } from './infrastructure';
 import {
+  MariaDbContextRepository,
   MariaDbProjectRepository,
   MariaDbTaskRepository,
   ProjectService,
@@ -43,9 +44,10 @@ async function start(): Promise<void> {
 
   const actor = await authService.authenticateAccessToken(runtime.accessToken);
 
+  const contextRepository = new MariaDbContextRepository(pool);
   const projectRepository = new MariaDbProjectRepository(pool);
   const taskRepository = new MariaDbTaskRepository(pool);
-  const projectService = new ProjectService(projectRepository, taskRepository);
+  const projectService = new ProjectService(projectRepository, taskRepository, contextRepository);
   const taskService = new TaskService(taskRepository, projectRepository);
   const server = createPlatformMcpServer({
     actorUserId: actor.userId,

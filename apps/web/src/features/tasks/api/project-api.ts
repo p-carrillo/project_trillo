@@ -11,8 +11,11 @@ import { isApiRequestError, requestJson } from '../../shared/api/api-request';
 
 const BASE_PATH = '/api/v1';
 
-export async function fetchProjects(): Promise<ProjectDto[]> {
-  const response = await requestJson<ListProjectsResponse>(`${BASE_PATH}/projects`);
+export async function fetchProjects(contextId?: string): Promise<ProjectDto[]> {
+  const suffix = typeof contextId === 'string' && contextId.trim().length > 0
+    ? `?contextId=${encodeURIComponent(contextId.trim())}`
+    : '';
+  const response = await requestJson<ListProjectsResponse>(`${BASE_PATH}/projects${suffix}`);
   return response.data;
 }
 

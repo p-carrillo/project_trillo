@@ -10,6 +10,7 @@ export type TaskType = (typeof taskTypes)[number];
 export type TaskId = string;
 export type BoardId = string;
 export type ProjectId = string;
+export type ContextId = string;
 export type UserId = string;
 
 export interface UserDto {
@@ -58,10 +59,40 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface ContextDto {
+  id: ContextId;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListContextsResponse {
+  data: ContextDto[];
+  meta: {
+    total: number;
+  };
+}
+
+export interface ContextResponse {
+  data: ContextDto;
+}
+
+export interface CreateContextRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface UpdateContextRequest {
+  name?: string;
+  description?: string | null;
+}
+
 export interface ProjectDto {
   id: ProjectId;
   name: string;
   description: string | null;
+  contextIds: ContextId[];
   createdAt: string;
   updatedAt: string;
 }
@@ -76,11 +107,13 @@ export interface ListProjectsResponse {
 export interface CreateProjectRequest {
   name: string;
   description?: string | null;
+  contextIds?: ContextId[];
 }
 
 export interface UpdateProjectRequest {
   name?: string;
   description?: string | null;
+  contextIds?: ContextId[];
 }
 
 export interface ReorderProjectsRequest {

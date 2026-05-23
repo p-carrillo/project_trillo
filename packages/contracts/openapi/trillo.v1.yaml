@@ -142,11 +142,161 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+  /contexts:
+    get:
+      summary: List contexts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Contexts returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListContextsResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    post:
+      summary: Create a new context
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContextRequest'
+      responses:
+        '201':
+          description: Context created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Context name conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /contexts/{contextId}:
+    patch:
+      summary: Update context details
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: contextId
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContextRequest'
+      responses:
+        '200':
+          description: Context updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Context not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Context name conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    delete:
+      summary: Delete a context
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: contextId
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+      responses:
+        '204':
+          description: Context deleted
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Context not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Context delete conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
   /projects:
     get:
       summary: List projects
       security:
         - BearerAuth: []
+      parameters:
+        - in: query
+          name: contextId
+          required: false
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 64
       responses:
         '200':
           description: Projects returned successfully
@@ -613,7 +763,7 @@ components:
           type: string
           minLength: 8
           maxLength: 120
-    Project:
+    Context:
       type: object
       required:
         - id
@@ -635,6 +785,41 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - contextIds
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          minLength: 2
+          maxLength: 64
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 4000
+        contextIds:
+          type: array
+          items:
+            type: string
+            minLength: 2
+            maxLength: 64
         createdAt:
           type: string
           format: date-time
@@ -708,6 +893,21 @@ components:
             total:
               type: integer
               minimum: 0
+    ListContextsResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Context'
+        meta:
+          type: object
+          required: [total]
+          properties:
+            total:
+              type: integer
+              minimum: 0
     ListProjectsResponse:
       type: object
       required: [data, meta]
@@ -736,7 +936,45 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+        contextIds:
+          type: array
+          items:
+            type: string
+            minLength: 2
+            maxLength: 64
     UpdateProjectRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 4000
+        contextIds:
+          type: array
+          items:
+            type: string
+            minLength: 2
+            maxLength: 64
+    CreateContextRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 4000
+    UpdateContextRequest:
       type: object
       minProperties: 1
       properties:
@@ -830,6 +1068,12 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Project'
+    ContextResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Context'
     ApiError:
       type: object
       required: [error]

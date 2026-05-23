@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ProjectService, TaskService } from '../../tasks/application';
 import { createTaskManagerToolset } from '../../tasks/interfaces/mcp';
+import { InMemoryContextRepository } from '../../tasks/test/helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
 
@@ -78,16 +79,19 @@ describe('MCP tool contract', () => {
 });
 
 async function createToolset() {
+  const contextRepository = new InMemoryContextRepository();
   const projectRepository = new InMemoryProjectRepository();
   const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const now = new Date('2026-02-19T10:00:00.000Z');
   const actorUserId = 'user-alpha';
+  const defaultContext = await contextRepository.ensureDefaultContext(actorUserId, now);
 
   await projectRepository.create({
     id: 'project-alpha',
     ownerUserId: actorUserId,
     name: 'Project Alpha',
     description: 'Primary board for product planning and delivery.',
+    contextIds: [defaultContext.id],
     sortOrder: 0,
     createdAt: now,
     updatedAt: now
@@ -95,7 +99,7 @@ async function createToolset() {
 
   return createTaskManagerToolset({
     actorUserId,
-    projectService: new ProjectService(projectRepository, taskRepository, () => now),
+    projectService: new ProjectService(projectRepository, taskRepository, contextRepository, () => now),
     taskService: new TaskService(taskRepository, projectRepository, () => now)
   });
 }

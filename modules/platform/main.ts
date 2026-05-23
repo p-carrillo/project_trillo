@@ -1,6 +1,8 @@
 import { createPlatformServer } from './application';
 import { loadPlatformConfig, createDatabasePool, checkDatabaseReadiness } from './infrastructure';
 import {
+  ContextService,
+  MariaDbContextRepository,
   MariaDbProjectRepository,
   MariaDbTaskRepository,
   ProjectService,
@@ -36,12 +38,15 @@ async function start(): Promise<void> {
   const authService = new AuthService(userRepository, passwordHasher, accessTokenService);
   const userService = new UserService(userRepository, passwordHasher);
 
+  const contextRepository = new MariaDbContextRepository(pool);
   const projectRepository = new MariaDbProjectRepository(pool);
   const taskRepository = new MariaDbTaskRepository(pool);
-  const projectService = new ProjectService(projectRepository, taskRepository);
+  const contextService = new ContextService(contextRepository, projectRepository);
+  const projectService = new ProjectService(projectRepository, taskRepository, contextRepository);
   const taskService = new TaskService(taskRepository, projectRepository);
 
   const server = await createPlatformServer({
+    contextService,
     projectService,
     taskService,
     authService,

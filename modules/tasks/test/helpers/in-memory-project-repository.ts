@@ -14,9 +14,10 @@ export class InMemoryProjectRepository implements ProjectRepository {
     return this.projects.get(projectId)?.ownerUserId ?? null;
   }
 
-  async listByOwner(userId: string): Promise<Project[]> {
+  async listByOwner(userId: string, contextId?: string): Promise<Project[]> {
     return Array.from(this.projects.values())
       .filter((project) => project.ownerUserId === userId)
+      .filter((project) => (contextId ? project.contextIds.includes(contextId) : true))
       .sort(
         (left, right) =>
           left.sortOrder - right.sortOrder || left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id)
@@ -49,7 +50,7 @@ export class InMemoryProjectRepository implements ProjectRepository {
       throw new ProjectNameTakenError(project.name);
     }
 
-    const entity: Project = { ...project };
+    const entity: Project = { ...project, contextIds: [...project.contextIds] };
     this.projects.set(project.id, entity);
     return entity;
   }
@@ -69,6 +70,7 @@ export class InMemoryProjectRepository implements ProjectRepository {
       ...current,
       name: patch.name,
       description: patch.description,
+      contextIds: [...patch.contextIds],
       updatedAt
     };
 

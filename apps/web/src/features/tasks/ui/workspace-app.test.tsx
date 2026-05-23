@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ProjectDto, TaskDto } from '@trillo/contracts';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ContextDto, ProjectDto, TaskDto } from '@trillo/contracts';
 import { WorkspaceApp } from './workspace-app';
+import * as contextApi from '../api/context-api';
 import * as projectApi from '../api/project-api';
 import * as taskApi from '../api/task-api';
+
+vi.mock('../api/context-api', () => ({
+  fetchContexts: vi.fn(),
+  createContext: vi.fn(),
+  updateContext: vi.fn(),
+  deleteContext: vi.fn(),
+  isContextApiError: () => false
+}));
 
 vi.mock('../api/project-api', () => ({
   fetchProjects: vi.fn(),
@@ -23,7 +32,10 @@ vi.mock('../api/task-api', () => ({
   isTaskApiError: () => false
 }));
 
+const fetchContextsMock = vi.mocked(contextApi.fetchContexts);
+const deleteContextMock = vi.mocked(contextApi.deleteContext);
 const fetchProjectsMock = vi.mocked(projectApi.fetchProjects);
+const updateProjectMock = vi.mocked(projectApi.updateProject);
 const fetchTasksMock = vi.mocked(taskApi.fetchTasks);
 const createTaskMock = vi.mocked(taskApi.createTask);
 const updateTaskMock = vi.mocked(taskApi.updateTask);
@@ -33,13 +45,34 @@ describe('WorkspaceApp epic linked tasks', () => {
     vi.clearAllMocks();
     window.localStorage.clear();
 
-    fetchProjectsMock.mockResolvedValue([createProject()]);
+    fetchContextsMock.mockResolvedValue([createContext(), createWorkContext()]);
+    fetchProjectsMock.mockImplementation(async (contextId?: string) => {
+      if (typeof contextId === 'string') {
+        return [createProject()];
+      }
+
+      return [createProject(), createWorkOnlyProject()];
+    });
     fetchTasksMock.mockResolvedValue([createEpicTask(), createLinkedTask()]);
     updateTaskMock.mockResolvedValue({
       ...createLinkedTask(),
       epicId: null
     });
     createTaskMock.mockResolvedValue(createQuickLinkedTask());
+    updateProjectMock.mockImplementation(async (projectId, payload) => {
+      if (projectId === 'project-work-only') {
+        return {
+          ...createWorkOnlyProject(),
+          contextIds: payload.contextIds ?? createWorkOnlyProject().contextIds
+        };
+      }
+
+      return {
+        ...createProject(),
+        contextIds: payload.contextIds ?? createProject().contextIds
+      };
+    });
+    deleteContextMock.mockResolvedValue(undefined);
   });
 
   it('unlinks and creates linked tasks from epic edit panel without closing it', async () => {
@@ -81,6 +114,78 @@ describe('WorkspaceApp epic linked tasks', () => {
 
     expect(screen.getByRole('button', { name: 'Create linked task' })).toBeInTheDocument();
   });
+
+  it('adds project membership from context edit panel', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open context options Personal' }));
+
+    expect(await screen.findByRole('heading', { name: 'Edit context' })).toBeInTheDocument();
+    const panel = await screen.findByRole('dialog', { name: 'Edit context' });
+    const addProjectSelect = within(panel).getByLabelText('Select a project to add');
+    fireEvent.change(addProjectSelect, { target: { value: 'project-work-only' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(updateProjectMock).toHaveBeenCalledWith('project-work-only', {
+        contextIds: ['context-work', 'context-personal']
+      });
+    });
+  });
+
+  it('deletes a context from context edit panel with confirmation', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open context options Personal' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete context' }));
+
+    await waitFor(() => {
+      expect(deleteContextMock).toHaveBeenCalledWith('context-personal');
+    });
+  });
+
+  it('toggles context edit panel when clicking the same context options button twice', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    const contextOptionsButton = await screen.findByRole('button', { name: 'Open context options Personal' });
+
+    fireEvent.click(contextOptionsButton);
+    expect(await screen.findByRole('heading', { name: 'Edit context' })).toBeInTheDocument();
+
+    fireEvent.click(contextOptionsButton);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit context' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('toggles project edit panel when clicking the same project options button twice', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    const projectOptionsButton = await screen.findByRole('button', { name: 'Open project options Project Alpha' });
+
+    fireEvent.click(projectOptionsButton);
+    expect(await screen.findByRole('heading', { name: 'Edit project' })).toBeInTheDocument();
+
+    fireEvent.click(projectOptionsButton);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit project' })).not.toBeInTheDocument();
+    });
+  });
 });
 
 function createProject(): ProjectDto {
@@ -88,6 +193,38 @@ function createProject(): ProjectDto {
     id: 'project-alpha',
     name: 'Project Alpha',
     description: 'Main project',
+    contextIds: ['context-personal'],
+    createdAt: '2026-02-20T00:00:00.000Z',
+    updatedAt: '2026-02-20T00:00:00.000Z'
+  };
+}
+
+function createContext(): ContextDto {
+  return {
+    id: 'context-personal',
+    name: 'Personal',
+    description: 'Default context',
+    createdAt: '2026-02-20T00:00:00.000Z',
+    updatedAt: '2026-02-20T00:00:00.000Z'
+  };
+}
+
+function createWorkContext(): ContextDto {
+  return {
+    id: 'context-work',
+    name: 'Work',
+    description: 'Work context',
+    createdAt: '2026-02-20T00:00:00.000Z',
+    updatedAt: '2026-02-20T00:00:00.000Z'
+  };
+}
+
+function createWorkOnlyProject(): ProjectDto {
+  return {
+    id: 'project-work-only',
+    name: 'Project Work Only',
+    description: null,
+    contextIds: ['context-work'],
     createdAt: '2026-02-20T00:00:00.000Z',
     updatedAt: '2026-02-20T00:00:00.000Z'
   };

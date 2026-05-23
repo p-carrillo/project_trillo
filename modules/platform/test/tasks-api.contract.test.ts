@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createPlatformServer } from '../application';
-import { ProjectService, TaskService } from '../../tasks/application';
+import { ContextService, ProjectService, TaskService } from '../../tasks/application';
+import { InMemoryContextRepository } from '../../tasks/test/helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
 import { AuthService, UserService } from '../../users/application';
@@ -9,6 +10,146 @@ import { FakeAccessTokenService } from '../../users/test/helpers/fake-access-tok
 import { FakePasswordHasher } from '../../users/test/helpers/fake-password-hasher';
 
 describe('Task API contract with tenancy', () => {
+  it('returns 401 for protected contexts endpoint without token', async () => {
+    const { server } = await createTestServer();
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/contexts'
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'unauthorized',
+        message: 'Missing or invalid authentication token.'
+      }
+    });
+
+    await server.close();
+  });
+
+  it('creates, lists and updates contexts for authenticated user', async () => {
+    const { server, userAlpha } = await createTestServer();
+
+    const createResponse = await server.inject({
+      method: 'POST',
+      url: '/api/v1/contexts',
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        name: 'Work',
+        description: 'Main work context'
+      }
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const createdContext = createResponse.json().data as { id: string; name: string };
+    expect(createdContext.name).toBe('Work');
+
+    const listResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/contexts',
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toMatchObject({
+      data: [{ id: createdContext.id, name: 'Work' }],
+      meta: { total: 1 }
+    });
+
+    const updateResponse = await server.inject({
+      method: 'PATCH',
+      url: `/api/v1/contexts/${createdContext.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      },
+      payload: {
+        name: 'Work v2'
+      }
+    });
+
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json()).toMatchObject({
+      data: {
+        id: createdContext.id,
+        name: 'Work v2'
+      }
+    });
+
+    await server.close();
+  });
+
+  it('deletes context and reassigns orphan projects to another context', async () => {
+    const { server, projectService, contextService, userAlpha } = await createTestServer();
+
+    const personal = await contextService.createContext(userAlpha.user.id, { name: 'Personal' });
+    const work = await contextService.createContext(userAlpha.user.id, { name: 'Work' });
+    await projectService.createProject(userAlpha.user.id, {
+      name: 'Alpha Project',
+      contextIds: [work.id]
+    });
+
+    const deleteResponse = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/contexts/${work.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(deleteResponse.statusCode).toBe(204);
+
+    const projectsInPersonalResponse = await server.inject({
+      method: 'GET',
+      url: `/api/v1/projects?contextId=${personal.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(projectsInPersonalResponse.statusCode).toBe(200);
+    expect(projectsInPersonalResponse.json()).toMatchObject({
+      data: [
+        {
+          name: 'Alpha Project',
+          contextIds: [personal.id]
+        }
+      ],
+      meta: { total: 1 }
+    });
+
+    await server.close();
+  });
+
+  it('returns 409 when deleting the last remaining context', async () => {
+    const { server, contextService, userAlpha } = await createTestServer();
+
+    const personal = await contextService.createContext(userAlpha.user.id, { name: 'Personal' });
+
+    const response = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/contexts/${personal.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: {
+        code: 'context_delete_not_allowed',
+        message: 'Cannot delete the last remaining context.'
+      }
+    });
+
+    await server.close();
+  });
+
   it('returns 401 for protected projects endpoint without token', async () => {
     const { server } = await createTestServer();
 
@@ -192,6 +333,38 @@ describe('Task API contract with tenancy', () => {
     await server.close();
   });
 
+  it('filters projects by context id', async () => {
+    const { server, projectService, contextService, userAlpha } = await createTestServer();
+
+    const shared = await contextService.createContext(userAlpha.user.id, { name: 'Shared' });
+    const isolated = await contextService.createContext(userAlpha.user.id, { name: 'Private' });
+
+    const sharedProject = await projectService.createProject(userAlpha.user.id, {
+      name: 'Shared Project',
+      contextIds: [shared.id]
+    });
+    await projectService.createProject(userAlpha.user.id, {
+      name: 'Private Project',
+      contextIds: [isolated.id]
+    });
+
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/v1/projects?contextId=${shared.id}`,
+      headers: {
+        authorization: `Bearer ${userAlpha.accessToken}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      data: [{ id: sharedProject.id, name: 'Shared Project' }],
+      meta: { total: 1 }
+    });
+
+    await server.close();
+  });
+
   it('returns tasks list for owned board', async () => {
     const { server, projectService, taskService, userAlpha } = await createTestServer();
 
@@ -261,6 +434,7 @@ describe('Task API contract with tenancy', () => {
 });
 
 async function createTestServer() {
+  const contextRepository = new InMemoryContextRepository();
   const projectRepository = new InMemoryProjectRepository();
   const taskRepository = new InMemoryTaskRepository((projectId) => projectRepository.resolveOwner(projectId));
   const userRepository = new InMemoryUserRepository();
@@ -268,7 +442,8 @@ async function createTestServer() {
   const tokenService = new FakeAccessTokenService();
   const now = new Date('2026-02-17T10:00:00.000Z');
 
-  const projectService = new ProjectService(projectRepository, taskRepository, () => now);
+  const contextService = new ContextService(contextRepository, projectRepository, () => now);
+  const projectService = new ProjectService(projectRepository, taskRepository, contextRepository, () => now);
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
@@ -288,6 +463,7 @@ async function createTestServer() {
   });
 
   const server = await createPlatformServer({
+    contextService,
     projectService,
     taskService,
     authService,
@@ -297,6 +473,7 @@ async function createTestServer() {
 
   return {
     server,
+    contextService,
     projectService,
     taskService,
     userAlpha,

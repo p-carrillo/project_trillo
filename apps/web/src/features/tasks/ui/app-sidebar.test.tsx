@@ -8,11 +8,17 @@ describe('AppSidebar', () => {
     const defaultProps: ComponentProps<typeof AppSidebar> = {
       isOpen: true,
       username: 'john_doe',
+      contexts: [{ id: 'context-personal', name: 'Personal' }],
+      selectedContextId: 'context-personal',
       projects: [],
       selectedProjectId: null,
+      isCreatingContext: false,
       isCreatingProject: false,
       isDeletingProjectId: null,
       onClose: vi.fn(),
+      onSelectContext: vi.fn(),
+      onCreateContext: vi.fn().mockResolvedValue(undefined),
+      onOpenContextPanel: vi.fn(),
       onSelectProject: vi.fn(),
       onCreateProject: vi.fn().mockResolvedValue(undefined),
       onReorderProject: vi.fn(),
@@ -58,5 +64,19 @@ describe('AppSidebar', () => {
     fireEvent.drop(targetProjectItem as HTMLElement);
 
     expect(onReorderProject).toHaveBeenCalledWith('project-alpha', 'project-beta');
+  });
+
+  it('opens active context panel from top burger and closes context dropdown with X', () => {
+    const onOpenContextPanel = vi.fn();
+    renderSidebar({ onOpenContextPanel });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open context options Personal' }));
+    expect(onOpenContextPanel).toHaveBeenCalledWith('context-personal');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open contexts menu' }));
+    expect(screen.getByLabelText('Contexts list')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close contexts menu' }));
+    expect(screen.queryByLabelText('Contexts list')).toBeNull();
   });
 });

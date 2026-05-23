@@ -3,6 +3,12 @@ import { useEffect, useRef, type FormEvent } from 'react';
 interface ProjectFormState {
   name: string;
   description: string;
+  contextIds: string[];
+}
+
+interface ContextOption {
+  id: string;
+  name: string;
 }
 
 interface EditProjectPanelProps {
@@ -10,9 +16,11 @@ interface EditProjectPanelProps {
   isSubmitting: boolean;
   isDeleting: boolean;
   form: ProjectFormState;
+  contexts: ContextOption[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateField: (field: keyof ProjectFormState, value: string) => void;
+  onToggleContext: (contextId: string) => void;
   onDeleteProject: () => void;
 }
 
@@ -21,9 +29,11 @@ export function EditProjectPanel({
   isSubmitting,
   isDeleting,
   form,
+  contexts,
   onClose,
   onSubmit,
   onUpdateField,
+  onToggleContext,
   onDeleteProject
 }: EditProjectPanelProps) {
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +80,28 @@ export function EditProjectPanel({
           rows={4}
         />
 
+        <fieldset className="form-tag-fieldset">
+          <legend>Contexts</legend>
+          <div className="context-multi-select">
+            {contexts.length === 0 ? <p className="context-empty">No contexts available.</p> : null}
+            {contexts.map((context) => {
+              const isChecked = form.contextIds.includes(context.id);
+
+              return (
+                <label key={context.id} className={`context-checkbox ${isChecked ? 'context-checkbox--active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => onToggleContext(context.id)}
+                    disabled={isSubmitting || isDeleting}
+                  />
+                  <span className="context-checkbox-name">{context.name}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
         <div className="form-actions">
           <button
             type="button"
@@ -79,7 +111,11 @@ export function EditProjectPanel({
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </button>
-          <button type="submit" className="primary-btn" disabled={isSubmitting || isDeleting}>
+          <button
+            type="submit"
+            className="primary-btn"
+            disabled={isSubmitting || isDeleting || form.contextIds.length === 0}
+          >
             {isSubmitting ? 'Saving...' : 'Save changes'}
           </button>
         </div>
