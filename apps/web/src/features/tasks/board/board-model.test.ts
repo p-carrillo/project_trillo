@@ -53,7 +53,7 @@ describe('buildTaskBoardColumns', () => {
     expect(columns[2]?.count).toBe(0);
   });
 
-  it('keeps epic tasks first and then orders by priority within each status column', () => {
+  it('groups each epic with its linked tasks before the next epic', () => {
     const unorderedTasks = [
       {
         id: 'task-1',
@@ -93,12 +93,38 @@ describe('buildTaskBoardColumns', () => {
         epicId: 'epic-2',
         createdAt: '2026-02-17T10:00:00.000Z',
         updatedAt: '2026-02-17T10:00:00.000Z'
+      },
+      {
+        id: 'epic-1',
+        boardId: 'project-alpha',
+        title: 'Website revamp',
+        description: null,
+        category: 'Product',
+        priority: 'high' as const,
+        status: 'todo' as const,
+        taskType: 'epic' as const,
+        epicId: null,
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z'
+      },
+      {
+        id: 'task-3',
+        boardId: 'project-alpha',
+        title: 'Define homepage hero copy',
+        description: null,
+        category: 'Marketing',
+        priority: 'medium' as const,
+        status: 'todo' as const,
+        taskType: 'task' as const,
+        epicId: 'epic-1',
+        createdAt: '2026-02-17T10:00:00.000Z',
+        updatedAt: '2026-02-17T10:00:00.000Z'
       }
     ];
 
     const columns = buildTaskBoardColumns(unorderedTasks, '');
 
-    expect(columns[0]?.tasks.map((task) => task.id)).toEqual(['epic-2', 'task-2', 'task-1']);
+    expect(columns[0]?.tasks.map((task) => task.id)).toEqual(['epic-1', 'task-3', 'epic-2', 'task-2', 'task-1']);
   });
 
   it('filters tasks by search text', () => {

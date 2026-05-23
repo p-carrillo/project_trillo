@@ -68,6 +68,7 @@ export function TaskBoard({
   const [columnDropTargetId, setColumnDropTargetId] = useState<string | null>(null);
   const [columnModal, setColumnModal] = useState<ColumnModalState>(null);
   const [columnModalValue, setColumnModalValue] = useState('');
+  const [collapsedEpicIds, setCollapsedEpicIds] = useState<string[]>([]);
   const isColumnDragActive = draggingColumnId !== null;
   const orderedColumns = useMemo<OrderedColumn[]>(() => {
     const defaultById = new Map(columns.map((column) => [createStatusColumnOrderId(column.status), column]));
@@ -158,6 +159,12 @@ export function TaskBoard({
     closeColumnModal();
   }
 
+  function handleToggleEpicTasks(epicId: string) {
+    setCollapsedEpicIds((current) =>
+      current.includes(epicId) ? current.filter((item) => item !== epicId) : [...current, epicId]
+    );
+  }
+
   return (
     <section className="board-section" aria-label="Task board">
       {isLoading ? <p className="status-line">Loading tasks...</p> : null}
@@ -209,6 +216,8 @@ export function TaskBoard({
                   isColumnDragging={draggingColumnId === entry.id}
                   isColumnDropTarget={columnDropTargetId === entry.id}
                   isDropTarget={activeDropStatus === column.status}
+                  collapsedEpicIds={collapsedEpicIds}
+                  onToggleEpicTasks={handleToggleEpicTasks}
                 />
               );
             }

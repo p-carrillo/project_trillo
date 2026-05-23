@@ -1,8 +1,12 @@
-import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type { TaskDto } from '@trillo/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskColumn } from './task-column';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('TaskColumn', () => {
   it('keeps task drag active without preventing default on the column container', () => {
@@ -43,6 +47,26 @@ describe('TaskColumn', () => {
     expect(onStartDraggingColumn).not.toHaveBeenCalled();
     expect(dragStartEvent.defaultPrevented).toBe(true);
   });
+
+  it('hides linked subtasks when their epic is collapsed', () => {
+    renderColumn({
+      column: {
+        status: 'todo',
+        label: 'To Do',
+        count: 3,
+        tasks: [
+          createTask({ id: 'epic-1', title: 'Epic', taskType: 'epic', epicId: null }),
+          createTask({ id: 'task-2', title: 'Linked task', taskType: 'task', epicId: 'epic-1' }),
+          createTask({ id: 'task-3', title: 'Standalone task', taskType: 'task', epicId: null })
+        ]
+      },
+      collapsedEpicIds: ['epic-1']
+    });
+
+    expect(screen.queryByText('Epic')).not.toBeNull();
+    expect(screen.queryByText('Linked task')).toBeNull();
+    expect(screen.queryByText('Standalone task')).not.toBeNull();
+  });
 });
 
 function renderColumn(overrides: Partial<ComponentProps<typeof TaskColumn>> = {}) {
@@ -69,7 +93,9 @@ function renderColumn(overrides: Partial<ComponentProps<typeof TaskColumn>> = {}
     isColumnDragActive: false,
     isColumnDragging: false,
     isColumnDropTarget: false,
-    isDropTarget: false
+    isDropTarget: false,
+    collapsedEpicIds: [],
+    onToggleEpicTasks: vi.fn()
   };
 
   const props = {
@@ -80,7 +106,7 @@ function renderColumn(overrides: Partial<ComponentProps<typeof TaskColumn>> = {}
   render(<TaskColumn {...props} />);
 }
 
-function createTask(): TaskDto {
+function createTask(overrides: Partial<TaskDto> = {}): TaskDto {
   return {
     id: 'task-1',
     boardId: 'board-1',
@@ -92,7 +118,8 @@ function createTask(): TaskDto {
     taskType: 'task',
     epicId: null,
     createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z'
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides
   };
 }
 

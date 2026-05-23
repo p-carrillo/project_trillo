@@ -21,6 +21,8 @@ interface TaskColumnProps {
   isColumnDragging: boolean;
   isColumnDropTarget: boolean;
   isDropTarget: boolean;
+  collapsedEpicIds: string[];
+  onToggleEpicTasks: (epicId: string) => void;
 }
 
 export function TaskColumn({
@@ -41,8 +43,12 @@ export function TaskColumn({
   isColumnDragActive,
   isColumnDragging,
   isColumnDropTarget,
-  isDropTarget
+  isDropTarget,
+  collapsedEpicIds,
+  onToggleEpicTasks
 }: TaskColumnProps) {
+  const visibleTasks = resolveVisibleTasks(column.tasks, collapsedEpicIds);
+
   return (
     <article
       className={`task-column ${isDropTarget ? 'task-column--drop-target' : ''} ${isColumnDropTarget ? 'task-column--column-drop-target' : ''} ${isColumnDragging ? 'task-column--column-dragging' : ''}`}
@@ -107,10 +113,10 @@ export function TaskColumn({
       </header>
 
       <div className="task-list">
-        {column.tasks.length === 0 ? (
+        {visibleTasks.length === 0 ? (
           <div className="empty-state">No tasks in this stage.</div>
         ) : (
-          column.tasks.map((task) => (
+          visibleTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
@@ -119,6 +125,8 @@ export function TaskColumn({
               onEndDragging={onEndDragging}
               isDragging={draggingTaskId === task.id}
               isDragDisabled={isColumnDragActive}
+              isEpicCollapsed={collapsedEpicIds.includes(task.id)}
+              onToggleEpicTasks={onToggleEpicTasks}
             />
           ))
         )}
@@ -133,6 +141,26 @@ export function TaskColumn({
       </div>
     </article>
   );
+}
+
+function resolveVisibleTasks(tasks: TaskDto[], collapsedEpicIds: string[]): TaskDto[] {
+  if (collapsedEpicIds.length === 0) {
+    return tasks;
+  }
+
+  const collapsed = new Set(collapsedEpicIds);
+  return tasks.filter((task) => {
+    const taskType = task.taskType ?? 'task';
+    if (taskType === 'epic') {
+      return true;
+    }
+
+    if (!task.epicId) {
+      return true;
+    }
+
+    return !collapsed.has(task.epicId);
+  });
 }
 
 type ColumnDragStartTarget = 'column' | 'task-card' | 'interactive';

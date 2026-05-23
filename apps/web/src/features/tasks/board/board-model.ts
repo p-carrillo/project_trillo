@@ -55,16 +55,36 @@ export function buildTaskBoardColumns(
 }
 
 function orderTasksByImportance(tasks: TaskDto[]): TaskDto[] {
-  return [...tasks].sort((left, right) => {
-    const leftTypeRank = (left.taskType ?? 'task') === 'epic' ? 0 : 1;
-    const rightTypeRank = (right.taskType ?? 'task') === 'epic' ? 0 : 1;
+  const normalizedTasks = tasks.map((task) => ({
+    ...task,
+    taskType: task.taskType ?? 'task'
+  }));
+  const epics = normalizedTasks.filter((task) => task.taskType === 'epic').sort(compareByPriority);
+  const nonEpicTasks = normalizedTasks.filter((task) => task.taskType !== 'epic');
+  const groupedTasks = new Set<string>();
+  const ordered: TaskDto[] = [];
 
-    if (leftTypeRank !== rightTypeRank) {
-      return leftTypeRank - rightTypeRank;
+  for (const epic of epics) {
+    ordered.push(epic);
+    groupedTasks.add(epic.id);
+
+    const linkedTasks = nonEpicTasks.filter((task) => task.epicId === epic.id).sort(compareByPriority);
+    for (const linkedTask of linkedTasks) {
+      ordered.push(linkedTask);
+      groupedTasks.add(linkedTask.id);
     }
+  }
 
-    return PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
-  });
+  const unlinkedTasks = nonEpicTasks
+    .filter((task) => !groupedTasks.has(task.id))
+    .sort(compareByPriority);
+
+  ordered.push(...unlinkedTasks);
+  return ordered;
+}
+
+function compareByPriority(left: TaskDto, right: TaskDto): number {
+  return PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
 }
 
 export function getNextStatus(status: TaskStatus): TaskStatus | null {

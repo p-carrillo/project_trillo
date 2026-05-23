@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ContextDto, ProjectDto, TaskDto } from '@trillo/contracts';
-import { WorkspaceApp } from './workspace-app';
+import { resolveVisibleEpicTabs, WorkspaceApp } from './workspace-app';
 import * as contextApi from '../api/context-api';
 import * as projectApi from '../api/project-api';
 import * as taskApi from '../api/task-api';
@@ -185,6 +185,82 @@ describe('WorkspaceApp epic linked tasks', () => {
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'Edit project' })).not.toBeInTheDocument();
     });
+  });
+
+  it('hides epic tab when epic and all linked tasks are done', async () => {
+    fetchTasksMock.mockResolvedValueOnce([
+      {
+        ...createEpicTask(),
+        id: 'epic-done',
+        title: 'Done epic',
+        status: 'done'
+      },
+      {
+        ...createLinkedTask(),
+        id: 'task-done-1',
+        title: 'Done child',
+        epicId: 'epic-done',
+        status: 'done'
+      },
+      {
+        ...createEpicTask(),
+        id: 'epic-active',
+        title: 'Active epic',
+        status: 'todo'
+      }
+    ]);
+
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    expect((await screen.findAllByRole('tab', { name: 'All' })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('tab', { name: 'Done epic' })).toBeNull();
+  });
+
+  it('keeps epic tab visible when epic is done but has pending linked tasks', async () => {
+    fetchTasksMock.mockResolvedValueOnce([
+      {
+        ...createEpicTask(),
+        id: 'epic-done-with-pending',
+        title: 'Done epic with pending child',
+        status: 'done'
+      },
+      {
+        ...createLinkedTask(),
+        id: 'task-pending-1',
+        title: 'Pending child',
+        epicId: 'epic-done-with-pending',
+        status: 'in_progress'
+      }
+    ]);
+
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    expect((await screen.findAllByRole('tab', { name: 'All' })).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('tab', { name: 'Done epic with pending child' })).not.toBeNull();
+  });
+});
+
+describe('resolveVisibleEpicTabs', () => {
+  it('hides epic when epic and all linked tasks are done', () => {
+    const result = resolveVisibleEpicTabs([
+      { ...createEpicTask(), id: 'epic-1', title: 'Epic done', status: 'done' },
+      { ...createLinkedTask(), id: 'task-1', epicId: 'epic-1', status: 'done' }
+    ]);
+
+    expect(result).toEqual([]);
+  });
+
+  it('keeps epic visible when epic is done but a linked task is not done', () => {
+    const result = resolveVisibleEpicTabs([
+      { ...createEpicTask(), id: 'epic-1', title: 'Epic done', status: 'done' },
+      { ...createLinkedTask(), id: 'task-1', epicId: 'epic-1', status: 'in_progress' }
+    ]);
+
+    expect(result).toEqual([{ id: 'epic-1', title: 'Epic done' }]);
   });
 });
 
