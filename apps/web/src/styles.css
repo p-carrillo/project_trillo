@@ -1002,6 +1002,7 @@ select {
   max-height: 86vh;
   overflow-y: auto;
   padding: 1rem;
+  color: var(--text-main);
 }
 
 .create-panel--open {
@@ -1062,14 +1063,34 @@ select {
   gap: 0.35rem;
 }
 
+.context-project-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.context-project-row {
+  border: 1px solid var(--border-soft);
+  padding: 0.45rem 0.55rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  color: var(--text-main);
+  text-align: left;
+}
+
 .context-checkbox {
   border: 1px solid var(--border-soft);
   padding: 0.45rem 0.55rem;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
   background: #ffffff;
+  color: var(--text-main);
+  text-align: left;
 }
 
 .context-checkbox--active {
@@ -1079,6 +1100,45 @@ select {
 
 .context-checkbox input {
   margin: 0;
+}
+
+.context-checkbox-name {
+  color: var(--text-main);
+  text-align: left;
+}
+
+.context-project-remove-btn {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border-soft);
+  color: #2f3544;
+}
+
+.context-project-remove-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.context-project-remove-btn:hover:not(:disabled) {
+  border-color: #111111;
+  background: #111111;
+  color: #ffffff;
+}
+
+.context-project-remove-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.context-project-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.context-project-add .ghost-btn {
+  padding: 0.64rem 0.9rem;
 }
 
 .context-empty {

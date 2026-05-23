@@ -153,23 +153,31 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     () => projects.find((project) => project.id === editingProjectId) ?? null,
     [editingProjectId, projects]
   );
-  const contextPanelProjectOptions = useMemo(() => {
+  const contextProjectsInPanel = useMemo(() => {
     if (!editingContextId) {
       return [];
     }
 
     return contextPanelProjects.map((project) => {
       const isSelected = contextForm.projectIds.includes(project.id);
-      const isOnlyContextForProject = project.contextIds.length === 1 && project.contextIds[0] === editingContextId;
+      if (!isSelected) {
+        return null;
+      }
+
+      const hasPersistedMembership = project.contextIds.includes(editingContextId);
+      const isOnlyContextForProject = hasPersistedMembership && project.contextIds.length === 1;
 
       return {
         id: project.id,
         name: project.name,
-        selected: isSelected,
-        disabled: isOnlyContextForProject
+        canRemove: !isOnlyContextForProject
       };
-    });
+    }).filter((project): project is { id: string; name: string; canRemove: boolean } => Boolean(project));
   }, [contextForm.projectIds, contextPanelProjects, editingContextId]);
+  const availableProjectsForContextPanel = useMemo(
+    () => contextPanelProjects.filter((project) => !contextForm.projectIds.includes(project.id)),
+    [contextForm.projectIds, contextPanelProjects]
+  );
   const activeProjectName = selectedProject?.name ?? 'Select a project';
   const isAnyPanelOpen = isCreatePanelOpen || isProjectPanelOpen || isContextPanelOpen;
   const panelCloseLabel = isProjectPanelOpen
@@ -545,6 +553,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function handleOpenProjectPanel(projectId: string) {
+    if (isProjectPanelOpen && editingProjectId === projectId) {
+      handleCloseProjectPanel();
+      return;
+    }
+
     const project = projects.find((item) => item.id === projectId);
     if (!project) {
       return;
@@ -987,6 +1000,11 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   }
 
   function handleOpenContextPanel(contextId: string) {
+    if (isContextPanelOpen && editingContextId === contextId) {
+      handleCloseContextPanel();
+      return;
+    }
+
     const context = contexts.find((item) => item.id === contextId);
     if (!context) {
       return;
@@ -1038,16 +1056,28 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     }));
   }
 
-  function handleToggleContextProject(projectId: string) {
+  function handleAddProjectToContext(projectId: string) {
     setContextForm((current) => {
-      const exists = current.projectIds.includes(projectId);
-      const nextProjectIds = exists
-        ? current.projectIds.filter((item) => item !== projectId)
-        : [...current.projectIds, projectId];
+      if (current.projectIds.includes(projectId)) {
+        return current;
+      }
 
       return {
         ...current,
-        projectIds: nextProjectIds
+        projectIds: [...current.projectIds, projectId]
+      };
+    });
+  }
+
+  function handleRemoveProjectFromContext(projectId: string) {
+    setContextForm((current) => {
+      if (!current.projectIds.includes(projectId)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        projectIds: current.projectIds.filter((item) => item !== projectId)
       };
     });
   }
@@ -1417,11 +1447,13 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
             isDeleting={Boolean(editingContextId && isDeletingContextId === editingContextId)}
             isLoadingProjects={isLoadingContextProjects}
             form={contextForm}
-            projects={contextPanelProjectOptions}
+            projectsInContext={contextProjectsInPanel}
+            availableProjects={availableProjectsForContextPanel}
             onClose={handleCloseContextPanel}
             onSubmit={handleSubmitContextUpdate}
             onUpdateField={handleUpdateContextField}
-            onToggleProject={handleToggleContextProject}
+            onAddProject={handleAddProjectToContext}
+            onRemoveProject={handleRemoveProjectFromContext}
             onDeleteContext={() => {
               if (!editingContextId) {
                 return;

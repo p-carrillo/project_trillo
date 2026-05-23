@@ -95,7 +95,7 @@ export function EditProjectPanel({
                     onChange={() => onToggleContext(context.id)}
                     disabled={isSubmitting || isDeleting}
                   />
-                  <span>{context.name}</span>
+                  <span className="context-checkbox-name">{context.name}</span>
                 </label>
               );
             })}

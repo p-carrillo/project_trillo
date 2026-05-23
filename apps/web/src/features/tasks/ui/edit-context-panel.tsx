@@ -9,8 +9,10 @@ interface ContextFormState {
 interface ContextProjectOption {
   id: string;
   name: string;
-  selected: boolean;
-  disabled: boolean;
+}
+
+interface ContextProjectInContextOption extends ContextProjectOption {
+  canRemove: boolean;
 }
 
 interface EditContextPanelProps {
@@ -19,11 +21,13 @@ interface EditContextPanelProps {
   isDeleting: boolean;
   isLoadingProjects: boolean;
   form: ContextFormState;
-  projects: ContextProjectOption[];
+  projectsInContext: ContextProjectInContextOption[];
+  availableProjects: ContextProjectOption[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateField: (field: keyof ContextFormState, value: string) => void;
-  onToggleProject: (projectId: string) => void;
+  onAddProject: (projectId: string) => void;
+  onRemoveProject: (projectId: string) => void;
   onDeleteContext: () => void;
 }
 
@@ -33,14 +37,17 @@ export function EditContextPanel({
   isDeleting,
   isLoadingProjects,
   form,
-  projects,
+  projectsInContext,
+  availableProjects,
   onClose,
   onSubmit,
   onUpdateField,
-  onToggleProject,
+  onAddProject,
+  onRemoveProject,
   onDeleteContext
 }: EditContextPanelProps) {
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const addProjectSelectRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -50,7 +57,7 @@ export function EditContextPanel({
 
   return (
     <aside
-      className={`create-panel ${isOpen ? 'create-panel--open' : ''}`}
+      className={`create-panel context-edit-panel ${isOpen ? 'create-panel--open' : ''}`}
       aria-hidden={!isOpen}
       role="dialog"
       aria-modal="true"
@@ -86,26 +93,76 @@ export function EditContextPanel({
 
         <fieldset className="form-tag-fieldset">
           <legend>Projects in this context</legend>
-          <div className="context-multi-select">
+          <div className="context-project-list">
             {isLoadingProjects ? <p className="context-empty">Loading projects...</p> : null}
-            {!isLoadingProjects && projects.length === 0 ? <p className="context-empty">No projects available.</p> : null}
+            {!isLoadingProjects && projectsInContext.length === 0 ? (
+              <p className="context-empty">No projects in this context yet.</p>
+            ) : null}
             {!isLoadingProjects
-              ? projects.map((project) => (
-                  <label
-                    key={project.id}
-                    className={`context-checkbox ${project.selected ? 'context-checkbox--active' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={project.selected}
-                      onChange={() => onToggleProject(project.id)}
-                      disabled={project.disabled || isSubmitting || isDeleting}
-                    />
-                    <span>{project.name}</span>
-                  </label>
+              ? projectsInContext.map((project) => (
+                  <div key={project.id} className="context-project-row">
+                    <span className="context-checkbox-name">{project.name}</span>
+                    <button
+                      type="button"
+                      className="icon-btn context-project-remove-btn"
+                      aria-label={`Remove project ${project.name} from context`}
+                      title={
+                        project.canRemove
+                          ? 'Remove project from this context'
+                          : 'A project must belong to at least one context.'
+                      }
+                      onClick={() => onRemoveProject(project.id)}
+                      disabled={!project.canRemove || isSubmitting || isDeleting}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                          d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v8h-2V9zm4 0h2v8h-2V9zM7 9h2v8H7V9z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 ))
               : null}
           </div>
+        </fieldset>
+
+        <fieldset className="form-tag-fieldset">
+          <legend>Add existing project</legend>
+          <div className="context-project-add">
+            <label htmlFor="context-project-add-select" className="sr-only">
+              Select a project to add
+            </label>
+            <select
+              id="context-project-add-select"
+              ref={addProjectSelectRef}
+              disabled={isLoadingProjects || isSubmitting || isDeleting || availableProjects.length === 0}
+            >
+              {availableProjects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                const projectId = addProjectSelectRef.current?.value;
+                if (!projectId) {
+                  return;
+                }
+
+                onAddProject(projectId);
+              }}
+              disabled={isLoadingProjects || isSubmitting || isDeleting || availableProjects.length === 0}
+            >
+              Add
+            </button>
+          </div>
+          {!isLoadingProjects && availableProjects.length === 0 ? (
+            <p className="context-empty">No other projects available.</p>
+          ) : null}
         </fieldset>
 
         <div className="form-actions">

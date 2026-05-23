@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ContextDto, ProjectDto, TaskDto } from '@trillo/contracts';
 import { WorkspaceApp } from './workspace-app';
 import * as contextApi from '../api/context-api';
@@ -124,9 +124,11 @@ describe('WorkspaceApp epic linked tasks', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open context options Personal' }));
 
     expect(await screen.findByRole('heading', { name: 'Edit context' })).toBeInTheDocument();
-    const workOnlyCheckbox = await screen.findByRole('checkbox', { name: 'Project Work Only' });
-    fireEvent.click(workOnlyCheckbox);
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const panel = await screen.findByRole('dialog', { name: 'Edit context' });
+    const addProjectSelect = within(panel).getByLabelText('Select a project to add');
+    fireEvent.change(addProjectSelect, { target: { value: 'project-work-only' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => {
       expect(updateProjectMock).toHaveBeenCalledWith('project-work-only', {
@@ -148,6 +150,40 @@ describe('WorkspaceApp epic linked tasks', () => {
 
     await waitFor(() => {
       expect(deleteContextMock).toHaveBeenCalledWith('context-personal');
+    });
+  });
+
+  it('toggles context edit panel when clicking the same context options button twice', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    const contextOptionsButton = await screen.findByRole('button', { name: 'Open context options Personal' });
+
+    fireEvent.click(contextOptionsButton);
+    expect(await screen.findByRole('heading', { name: 'Edit context' })).toBeInTheDocument();
+
+    fireEvent.click(contextOptionsButton);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit context' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('toggles project edit panel when clicking the same project options button twice', async () => {
+    render(
+      <WorkspaceApp username="john_doe" onOpenProfilePanel={vi.fn()} onSessionInvalid={vi.fn()} />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open workspace menu' }));
+    const projectOptionsButton = await screen.findByRole('button', { name: 'Open project options Project Alpha' });
+
+    fireEvent.click(projectOptionsButton);
+    expect(await screen.findByRole('heading', { name: 'Edit project' })).toBeInTheDocument();
+
+    fireEvent.click(projectOptionsButton);
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Edit project' })).not.toBeInTheDocument();
     });
   });
 });
