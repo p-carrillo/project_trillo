@@ -207,13 +207,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
         : 'Delete task';
 
   const normalizedTasks = useMemo(() => tasks.map((task) => normalizeTaskDto(task)), [tasks]);
-  const epics = useMemo(
-    () =>
-      normalizedTasks
-        .filter((task) => task.taskType === 'epic')
-        .map((task) => ({ id: task.id, title: task.title })),
-    [normalizedTasks]
-  );
+  const epics = useMemo(() => resolveVisibleEpicTabs(normalizedTasks), [normalizedTasks]);
   const columns = useMemo(
     () => buildTaskBoardColumns(normalizedTasks, searchText, selectedEpicId),
     [normalizedTasks, searchText, selectedEpicId]
@@ -1519,6 +1513,21 @@ function normalizeTaskDto(task: TaskDto, fallback?: Pick<CreateTaskRequest, 'tas
     taskType: task.taskType ?? fallback?.taskType ?? 'task',
     epicId: task.epicId ?? fallback?.epicId ?? null
   };
+}
+
+export function resolveVisibleEpicTabs(tasks: TaskDto[]): Array<{ id: string; title: string }> {
+  const epicTasks = tasks.filter((task) => task.taskType === 'epic');
+
+  return epicTasks
+    .filter((epic) => {
+      if (epic.status !== 'done') {
+        return true;
+      }
+
+      const linkedTasks = tasks.filter((task) => task.taskType !== 'epic' && task.epicId === epic.id);
+      return linkedTasks.some((task) => task.status !== 'done');
+    })
+    .map((task) => ({ id: task.id, title: task.title }));
 }
 
 function normalizeColumnLabel(value: string): string {

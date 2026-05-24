@@ -1,8 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type { TaskDto } from '@trillo/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskCard } from './task-card';
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('TaskCard', () => {
   it('renders epic tag only once and as the first tag for epic tasks', () => {
@@ -15,7 +19,7 @@ describe('TaskCard', () => {
 
     expect(tags[0]).toBe('epic');
     expect(epicTags).toHaveLength(1);
-    expect(screen.getByText('epic')).toHaveClass('task-tag--epic');
+    expect(screen.getByText('epic').className.includes('task-tag--epic')).toBe(true);
   });
 
   it('keeps category and task type tags for non-epic tasks', () => {
@@ -24,7 +28,25 @@ describe('TaskCard', () => {
     });
 
     expect(readTagTexts()).toEqual(['Backend', 'task']);
-    expect(screen.queryByText('epic')).not.toBeInTheDocument();
+    expect(screen.queryByText('epic')).toBeNull();
+  });
+
+  it('shows collapse button for epic tasks with minus sign when expanded', () => {
+    renderTaskCard({
+      task: createTask({ taskType: 'epic' }),
+      isEpicCollapsed: false
+    });
+
+    const collapseButton = screen.getByRole('button', { name: 'Hide subtasks for Ship kanban polish' });
+    expect(collapseButton.textContent).toBe('-');
+  });
+
+  it('does not show collapse button for non-epic tasks', () => {
+    renderTaskCard({
+      task: createTask({ taskType: 'task' })
+    });
+
+    expect(screen.queryByRole('button', { name: /subtasks for/i })).toBeNull();
   });
 });
 

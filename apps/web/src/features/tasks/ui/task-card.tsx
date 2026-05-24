@@ -7,6 +7,8 @@ interface TaskCardProps {
   onEndDragging: () => void;
   isDragging: boolean;
   isDragDisabled?: boolean;
+  isEpicCollapsed?: boolean;
+  onToggleEpicTasks?: (epicId: string) => void;
 }
 
 export function TaskCard({
@@ -15,11 +17,14 @@ export function TaskCard({
   onStartDragging,
   onEndDragging,
   isDragging,
-  isDragDisabled = false
+  isDragDisabled = false,
+  isEpicCollapsed = false,
+  onToggleEpicTasks
 }: TaskCardProps) {
   const taskType = task.taskType ?? 'task';
+  const isEpic = taskType === 'epic';
   const tags =
-    taskType === 'epic'
+    isEpic
       ? [
           { label: 'epic', className: 'task-tag task-tag--epic' },
           { label: task.category, className: 'task-tag' }
@@ -55,20 +60,36 @@ export function TaskCard({
             </span>
           ))}
         </div>
-        <button
-          type="button"
-          className="task-settings-btn"
-          draggable={false}
-          onMouseDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={() => onEditTask(task)}
-          aria-label={`Open task settings for ${task.title}`}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M4 7h16M4 12h16M4 17h16" />
-          </svg>
-        </button>
+        <div className="task-meta-actions">
+          {isEpic ? (
+            <button
+              type="button"
+              className="task-collapse-btn"
+              draggable={false}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={() => onToggleEpicTasks?.(task.id)}
+              aria-label={`${isEpicCollapsed ? 'Show' : 'Hide'} subtasks for ${task.title}`}
+            >
+              {isEpicCollapsed ? '+' : '-'}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="task-settings-btn"
+            draggable={false}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={() => onEditTask(task)}
+            aria-label={`Open task settings for ${task.title}`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <h3>{task.title}</h3>
