@@ -55,6 +55,39 @@ export async function runUserMigrations(
     `);
   }
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mcp_api_keys (
+      id CHAR(36) PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      name VARCHAR(80) NOT NULL,
+      key_prefix VARCHAR(14) NOT NULL,
+      key_suffix VARCHAR(4) NOT NULL,
+      key_hash VARCHAR(255) NOT NULL,
+      last_used_at DATETIME(3) NULL,
+      expires_at DATETIME(3) NULL,
+      revoked_at DATETIME(3) NULL,
+      created_at DATETIME(3) NOT NULL,
+      updated_at DATETIME(3) NOT NULL,
+      CONSTRAINT fk_mcp_api_keys_user_id
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    )
+  `);
+
+  if (!(await hasIndex(pool, 'mcp_api_keys', 'idx_mcp_api_keys_user_id'))) {
+    await pool.query(`
+      CREATE INDEX idx_mcp_api_keys_user_id
+      ON mcp_api_keys (user_id)
+    `);
+  }
+
+  if (!(await hasIndex(pool, 'mcp_api_keys', 'idx_mcp_api_keys_key_prefix'))) {
+    await pool.query(`
+      CREATE INDEX idx_mcp_api_keys_key_prefix
+      ON mcp_api_keys (key_prefix)
+    `);
+  }
+
   await ensureSeedUser(pool);
   const developmentUserId = options.enableDevelopmentFixtures ? await ensureDevelopmentUser(pool) : null;
 

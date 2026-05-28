@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { AuthSessionResponse } from '@trillo/contracts';
 import { App } from './App';
 import * as authApi from './features/auth/api/auth-api';
+import * as mcpApiKeyApi from './features/auth/api/mcp-api-key-api';
 
 vi.mock('./features/tasks/ui/workspace-app', () => ({
   WorkspaceApp: ({ username, onOpenProfilePanel }: { username: string; onOpenProfilePanel: () => void }) => (
@@ -26,9 +27,18 @@ vi.mock('./features/auth/api/auth-api', () => ({
   }
 }));
 
+vi.mock('./features/auth/api/mcp-api-key-api', () => ({
+  fetchMyMcpApiKeys: vi.fn(),
+  createMyMcpApiKey: vi.fn(),
+  revokeMyMcpApiKey: vi.fn()
+}));
+
 const loginUserMock = vi.mocked(authApi.loginUser);
 const updateMyProfileMock = vi.mocked(authApi.updateMyProfile);
 const changeMyPasswordMock = vi.mocked(authApi.changeMyPassword);
+const fetchMyMcpApiKeysMock = vi.mocked(mcpApiKeyApi.fetchMyMcpApiKeys);
+const createMyMcpApiKeyMock = vi.mocked(mcpApiKeyApi.createMyMcpApiKey);
+const revokeMyMcpApiKeyMock = vi.mocked(mcpApiKeyApi.revokeMyMcpApiKey);
 
 const sessionResponse: AuthSessionResponse = {
   data: {
@@ -59,6 +69,23 @@ describe('App auth routing', () => {
       email: 'john.new@example.com'
     });
     changeMyPasswordMock.mockResolvedValue();
+    fetchMyMcpApiKeysMock.mockResolvedValue([]);
+    createMyMcpApiKeyMock.mockResolvedValue({
+      key: {
+        id: 'key-1',
+        name: 'Desktop key',
+        keyPreview: 'trmcp_abcd...wxyz',
+        keyPrefix: 'trmcp_abcd',
+        keySuffix: 'wxyz',
+        lastUsedAt: null,
+        expiresAt: null,
+        revokedAt: null,
+        createdAt: '2026-02-19T00:00:00.000Z',
+        updatedAt: '2026-02-19T00:00:00.000Z'
+      },
+      plainTextApiKey: 'trmcp_full_secret'
+    });
+    revokeMyMcpApiKeyMock.mockResolvedValue();
   });
 
   it('renders homepage on root route', async () => {
@@ -249,5 +276,34 @@ describe('App auth routing', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/');
     });
+  });
+
+  it('generates and displays a new MCP API key in profile panel', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      'trillo.auth-session.v1',
+      JSON.stringify({
+        accessToken: 'token:user-1:john_doe',
+        tokenType: 'Bearer',
+        expiresIn: 86400,
+        user: sessionResponse.data
+      })
+    );
+    window.history.replaceState({}, '', '/u/john_doe');
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open profile panel trigger' }));
+    await user.type(screen.getByLabelText('Key name'), 'Desktop key');
+    await user.click(screen.getByRole('button', { name: 'Generate key' }));
+
+    await waitFor(() => {
+      expect(createMyMcpApiKeyMock).toHaveBeenCalledWith({
+        name: 'Desktop key'
+      });
+    });
+
+    expect(screen.getByText('trmcp_full_secret')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
   });
 });

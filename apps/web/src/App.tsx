@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { AuthSessionResponse, UserDto } from '@trillo/contracts';
+import type { AuthSessionResponse, McpApiKeyDto, UserDto } from '@trillo/contracts';
 import { WorkspaceApp } from './features/tasks/ui/workspace-app';
 import { Homepage } from './features/homepage/ui/homepage';
 import { AlphaAccessPage } from './features/homepage/ui/alpha-access-page';
 import { McpPage } from './features/homepage/ui/mcp-page';
 import { changeMyPassword, isAuthApiError, loginUser, updateMyProfile } from './features/auth/api/auth-api';
+import { createMyMcpApiKey, fetchMyMcpApiKeys, revokeMyMcpApiKey } from './features/auth/api/mcp-api-key-api';
 import { clearSession, readSession, writeSession, type AuthSession } from './features/auth/session-store';
 
 type AppRoute =
@@ -35,6 +36,10 @@ interface ProfileFormState {
   confirmNewPassword: string;
 }
 
+interface McpApiKeyFormState {
+  name: string;
+}
+
 export function App() {
   const [session, setSession] = useState<AuthSession | null>(() => readSession());
   const [route, setRoute] = useState<AppRoute>(() => parseRoute(normalizeLegacyPath(window.location.pathname)));
@@ -45,6 +50,15 @@ export function App() {
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [mcpApiKeys, setMcpApiKeys] = useState<McpApiKeyDto[]>([]);
+  const [isLoadingMcpApiKeys, setIsLoadingMcpApiKeys] = useState(false);
+  const [isCreatingMcpApiKey, setIsCreatingMcpApiKey] = useState(false);
+  const [revokingMcpApiKeyId, setRevokingMcpApiKeyId] = useState<string | null>(null);
+  const [mcpApiKeyError, setMcpApiKeyError] = useState<string | null>(null);
+  const [createdMcpApiKeyValue, setCreatedMcpApiKeyValue] = useState<string | null>(null);
+  const [mcpApiKeyForm, setMcpApiKeyForm] = useState<McpApiKeyFormState>({
+    name: ''
+  });
   const [loginForm, setLoginForm] = useState<LoginFormState>({
     username: '',
     password: ''
@@ -198,6 +212,14 @@ export function App() {
     };
   }, [isLoginModalOpen, isProfilePanelOpen]);
 
+  useEffect(() => {
+    if (!isProfilePanelOpen || !session) {
+      return;
+    }
+
+    void loadMcpApiKeys();
+  }, [isProfilePanelOpen, session]);
+
   const workspaceUsername = session?.user.username ?? null;
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -297,11 +319,85 @@ export function App() {
     }
   }
 
+  async function loadMcpApiKeys() {
+    setIsLoadingMcpApiKeys(true);
+    setMcpApiKeyError(null);
+
+    try {
+      const keys = await fetchMyMcpApiKeys();
+      setMcpApiKeys(keys);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleSessionInvalid();
+        return;
+      }
+
+      setMcpApiKeyError(mapApiError(error));
+    } finally {
+      setIsLoadingMcpApiKeys(false);
+    }
+  }
+
+  async function handleCreateMcpApiKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const normalizedName = mcpApiKeyForm.name.trim();
+    if (normalizedName.length === 0) {
+      return;
+    }
+
+    setIsCreatingMcpApiKey(true);
+    setMcpApiKeyError(null);
+    setCreatedMcpApiKeyValue(null);
+
+    try {
+      const created = await createMyMcpApiKey({
+        name: normalizedName
+      });
+
+      setMcpApiKeys((current) => [created.key, ...current]);
+      setCreatedMcpApiKeyValue(created.plainTextApiKey);
+      setMcpApiKeyForm({
+        name: ''
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleSessionInvalid();
+        return;
+      }
+
+      setMcpApiKeyError(mapApiError(error));
+    } finally {
+      setIsCreatingMcpApiKey(false);
+    }
+  }
+
+  async function handleRevokeMcpApiKey(keyId: string) {
+    setRevokingMcpApiKeyId(keyId);
+    setMcpApiKeyError(null);
+
+    try {
+      await revokeMyMcpApiKey(keyId);
+      setMcpApiKeys((current) => current.filter((key) => key.id !== keyId));
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleSessionInvalid();
+        return;
+      }
+
+      setMcpApiKeyError(mapApiError(error));
+    } finally {
+      setRevokingMcpApiKeyId(null);
+    }
+  }
+
   function handleSessionInvalid() {
     clearSession();
     setSession(null);
     setIsProfilePanelOpen(false);
     setIsLoginModalOpen(false);
+    setMcpApiKeys([]);
+    setCreatedMcpApiKeyValue(null);
     navigate('/', true, setRoute);
   }
 
@@ -310,6 +406,8 @@ export function App() {
     setSession(null);
     setIsProfilePanelOpen(false);
     setIsLoginModalOpen(false);
+    setMcpApiKeys([]);
+    setCreatedMcpApiKeyValue(null);
     navigate('/', true, setRoute);
   }
 
@@ -423,6 +521,8 @@ export function App() {
         username={workspaceUsername}
         onOpenProfilePanel={() => {
           setProfileError(null);
+          setMcpApiKeyError(null);
+          setCreatedMcpApiKeyValue(null);
           setIsProfilePanelOpen(true);
         }}
         onSessionInvalid={handleSessionInvalid}
@@ -529,6 +629,71 @@ export function App() {
               </button>
             </div>
           </form>
+
+          <section className="create-form profile-form mcp-api-keys-panel" aria-label="MCP API keys">
+            <h3>MCP API keys</h3>
+            <p className="mcp-api-keys-note">
+              Generate a key for MCP clients. The full key is shown only once after creation.
+            </p>
+
+            {mcpApiKeyError ? <p className="error-banner">{mcpApiKeyError}</p> : null}
+
+            <form className="mcp-api-keys-form" onSubmit={handleCreateMcpApiKey}>
+              <label htmlFor="mcp-api-key-name">Key name</label>
+              <input
+                id="mcp-api-key-name"
+                value={mcpApiKeyForm.name}
+                onChange={(event) => setMcpApiKeyForm({ name: event.target.value })}
+                minLength={2}
+                maxLength={120}
+                placeholder="Desktop client"
+                required
+              />
+              <div className="form-actions">
+                <button type="submit" className="primary-btn" disabled={isCreatingMcpApiKey || mcpApiKeyForm.name.trim().length === 0}>
+                  {isCreatingMcpApiKey ? 'Generating...' : 'Generate key'}
+                </button>
+              </div>
+            </form>
+
+            {createdMcpApiKeyValue ? (
+              <div className="mcp-api-key-secret" role="status" aria-live="polite">
+                <p className="mcp-api-key-secret-label">New key (copy now)</p>
+                <code>{createdMcpApiKeyValue}</code>
+              </div>
+            ) : null}
+
+            {isLoadingMcpApiKeys ? (
+              <p className="mcp-api-keys-empty">Loading keys...</p>
+            ) : mcpApiKeys.length === 0 ? (
+              <p className="mcp-api-keys-empty">No MCP keys yet.</p>
+            ) : (
+              <ul className="mcp-api-keys-list">
+                {mcpApiKeys.map((key) => (
+                  <li key={key.id} className="mcp-api-keys-item">
+                    <div>
+                      <p className="mcp-api-keys-item-name">{key.name}</p>
+                      <p className="mcp-api-keys-item-meta">
+                        <code>{key.keyPreview}</code>
+                        {' · '}
+                        Created {formatDateTime(key.createdAt)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      disabled={revokingMcpApiKeyId === key.id}
+                      onClick={() => {
+                        void handleRevokeMcpApiKey(key.id);
+                      }}
+                    >
+                      {revokingMcpApiKeyId === key.id ? 'Revoking...' : 'Revoke'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </aside>
     </>
@@ -617,6 +782,15 @@ function mapApiError(error: unknown): string {
   }
 
   return 'Unexpected error. Please try again.';
+}
+
+function formatDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
 }
 
 function isUnauthorizedError(error: unknown): boolean {

@@ -12,7 +12,9 @@ import {
 import {
   AuthService,
   JwtAccessTokenService,
+  MariaDbMcpApiKeyRepository,
   MariaDbUserRepository,
+  McpApiKeyService,
   ScryptPasswordHasher,
   UserService,
   runUserMigrations
@@ -37,6 +39,11 @@ async function start(): Promise<void> {
 
   const authService = new AuthService(userRepository, passwordHasher, accessTokenService);
   const userService = new UserService(userRepository, passwordHasher);
+  const mcpApiKeyService = new McpApiKeyService(
+    userRepository,
+    new MariaDbMcpApiKeyRepository(pool),
+    passwordHasher
+  );
 
   const contextRepository = new MariaDbContextRepository(pool);
   const projectRepository = new MariaDbProjectRepository(pool);
@@ -51,6 +58,7 @@ async function start(): Promise<void> {
     taskService,
     authService,
     userService,
+    mcpApiKeyService,
     isDatabaseReady: () => checkDatabaseReadiness(pool)
   }, {
     registrationEnabled: config.auth.registrationEnabled,

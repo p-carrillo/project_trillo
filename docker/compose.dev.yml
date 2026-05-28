@@ -54,6 +54,57 @@ services:
       timeout: 5s
       retries: 10
 
+  backend-dev:
+    image: node:22-alpine
+    profiles: ['dev-watch']
+    working_dir: /app
+    environment:
+      PNPM_HOME: /pnpm
+      PATH: /pnpm:$PATH
+      HOST: 0.0.0.0
+      PORT: 3000
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: trillo
+      DB_PASSWORD: trillo
+      DB_NAME: trillo
+      MCP_API_KEY: change-me
+      MCP_ACCESS_TOKEN: ''
+      JWT_ACCESS_SECRET: change-me-in-production
+      JWT_ACCESS_EXPIRES_IN: 86400
+      AUTH_REGISTER_ENABLED: 'true'
+      DEV_FIXTURES_ENABLED: 'true'
+      HTTP_API_KEY: ''
+      LOG_LEVEL: info
+      CHOKIDAR_USEPOLLING: 'true'
+      WATCHPACK_POLLING: 'true'
+    command: >
+      sh -c "corepack enable &&
+      pnpm install --no-frozen-lockfile &&
+      cd modules &&
+      pnpm dev"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    volumes:
+      - ..:/app
+      - backend_pnpm_store:/pnpm/store
+      - backend_node_modules:/app/node_modules
+      - backend_modules_node_modules:/app/modules/node_modules
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/ready').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   web:
     build:
       context: ..
@@ -71,20 +122,21 @@ services:
 
   web-dev:
     image: node:22-alpine
+    profiles: ['dev-watch']
     working_dir: /app
     environment:
       PNPM_HOME: /pnpm
       PATH: /pnpm:$PATH
       CHOKIDAR_USEPOLLING: 'true'
       WATCHPACK_POLLING: 'true'
-      VITE_API_PROXY_TARGET: http://backend:3000
+      VITE_API_PROXY_TARGET: http://backend-dev:3000
     command: >
       sh -c "corepack enable &&
       pnpm install --no-frozen-lockfile &&
       cd apps/web &&
       pnpm dev --host 0.0.0.0 --port 5173"
     depends_on:
-      backend:
+      backend-dev:
         condition: service_healthy
     ports:
       - '5173:5173'
@@ -101,6 +153,9 @@ services:
 
 volumes:
   mariadb_data:
+  backend_pnpm_store:
+  backend_node_modules:
+  backend_modules_node_modules:
   web_pnpm_store:
   web_node_modules:
   web_app_node_modules:

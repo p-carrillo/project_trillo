@@ -142,6 +142,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+  /users/me/mcp-api-keys:
+    get:
+      summary: List authenticated user MCP API keys
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: MCP API keys returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMcpApiKeysResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    post:
+      summary: Create an authenticated user MCP API key
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMcpApiKeyRequest'
+      responses:
+        '201':
+          description: MCP API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateMcpApiKeyResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /users/me/mcp-api-keys/{keyId}:
+    delete:
+      summary: Revoke authenticated user MCP API key
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: keyId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: MCP API key revoked
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: MCP API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
   /contexts:
     get:
       summary: List contexts
@@ -763,6 +837,94 @@ components:
           type: string
           minLength: 8
           maxLength: 120
+    McpApiKey:
+      type: object
+      required:
+        - id
+        - name
+        - keyPreview
+        - keyPrefix
+        - keySuffix
+        - lastUsedAt
+        - expiresAt
+        - revokedAt
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 2
+          maxLength: 80
+        keyPreview:
+          type: string
+        keyPrefix:
+          type: string
+          minLength: 14
+          maxLength: 14
+        keySuffix:
+          type: string
+          minLength: 4
+          maxLength: 4
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ListMcpApiKeysResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/McpApiKey'
+        meta:
+          type: object
+          required: [total]
+          properties:
+            total:
+              type: integer
+              minimum: 0
+    CreateMcpApiKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 80
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    CreateMcpApiKeyResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/McpApiKey'
+        meta:
+          type: object
+          required: [apiKey]
+          properties:
+            apiKey:
+              type: string
     Context:
       type: object
       required:

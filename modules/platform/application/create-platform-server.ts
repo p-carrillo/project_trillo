@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { registerContextRoutes, registerProjectRoutes, registerTaskRoutes } from '../../tasks/interfaces';
-import { registerAuthRoutes, registerUserRoutes, parseBearerToken } from '../../users/interfaces';
+import { parseBearerToken, registerAuthRoutes, registerMcpApiKeyRoutes, registerUserRoutes } from '../../users/interfaces';
 import type { PlatformDependencies } from '../domain';
 import { registerHealthRoutes } from '../interfaces';
 
@@ -88,6 +88,7 @@ export async function createPlatformServer(
     registrationEnabled: security.registrationEnabled
   });
   await registerUserRoutes(server, dependencies.userService, resolveAuthenticatedActor);
+  await registerMcpApiKeyRoutes(server, dependencies.mcpApiKeyService, resolveAuthenticatedActor);
   await registerContextRoutes(server, dependencies.contextService, resolveAuthenticatedUserId);
   await registerProjectRoutes(server, dependencies.projectService, resolveAuthenticatedUserId);
   await registerTaskRoutes(server, dependencies.taskService, resolveAuthenticatedUserId);

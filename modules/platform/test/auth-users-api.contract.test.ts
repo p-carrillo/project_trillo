@@ -4,9 +4,10 @@ import { ContextService, ProjectService, TaskService } from '../../tasks/applica
 import { InMemoryContextRepository } from '../../tasks/test/helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
-import { AuthService, UserService } from '../../users/application';
+import { AuthService, McpApiKeyService, UserService } from '../../users/application';
 import { InMemoryUserRepository } from '../../users/test/helpers/in-memory-user-repository';
 import { FakeAccessTokenService } from '../../users/test/helpers/fake-access-token-service';
+import { InMemoryMcpApiKeyRepository } from '../../users/test/helpers/in-memory-mcp-api-key-repository';
 import { FakePasswordHasher } from '../../users/test/helpers/fake-password-hasher';
 
 describe('Auth and users API contract', () => {
@@ -160,6 +161,79 @@ describe('Auth and users API contract', () => {
 
     await server.close();
   });
+
+  it('creates, lists and revokes MCP API keys for authenticated user', async () => {
+    const { server } = await createTestServer();
+
+    const registerResponse = await server.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        username: 'mcp_user',
+        email: 'mcp@example.com',
+        displayName: 'MCP User',
+        password: 'password123'
+      }
+    });
+
+    const token = registerResponse.json().meta.accessToken as string;
+
+    const createResponse = await server.inject({
+      method: 'POST',
+      url: '/api/v1/users/me/mcp-api-keys',
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        name: 'Desktop'
+      }
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.json()).toMatchObject({
+      data: {
+        name: 'Desktop'
+      },
+      meta: {
+        apiKey: expect.stringMatching(/^trmcp_/)
+      }
+    });
+
+    const keyId = createResponse.json().data.id as string;
+
+    const listResponse = await server.inject({
+      method: 'GET',
+      url: '/api/v1/users/me/mcp-api-keys',
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toMatchObject({
+      data: [
+        {
+          id: keyId,
+          name: 'Desktop'
+        }
+      ],
+      meta: {
+        total: 1
+      }
+    });
+
+    const revokeResponse = await server.inject({
+      method: 'DELETE',
+      url: `/api/v1/users/me/mcp-api-keys/${keyId}`,
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(revokeResponse.statusCode).toBe(204);
+
+    await server.close();
+  });
 });
 
 async function createTestServer() {
@@ -169,6 +243,7 @@ async function createTestServer() {
   const userRepository = new InMemoryUserRepository();
   const passwordHasher = new FakePasswordHasher();
   const tokenService = new FakeAccessTokenService();
+  const mcpApiKeyRepository = new InMemoryMcpApiKeyRepository();
   const now = new Date('2026-02-17T10:00:00.000Z');
 
   const contextService = new ContextService(contextRepository, projectRepository, () => now);
@@ -176,6 +251,7 @@ async function createTestServer() {
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
+  const mcpApiKeyService = new McpApiKeyService(userRepository, mcpApiKeyRepository, passwordHasher, () => now);
 
   const server = await createPlatformServer({
     contextService,
@@ -183,6 +259,7 @@ async function createTestServer() {
     taskService,
     authService,
     userService,
+    mcpApiKeyService,
     isDatabaseReady: async () => true
   });
 

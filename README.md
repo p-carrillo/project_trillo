@@ -22,10 +22,14 @@ Fullstack task manager with Hexagonal Architecture in the backend, shared contra
 ## MCP (`stdio`) For LLM Clients
 The backend exposes an MCP runtime separate from the HTTP server through `modules/platform/mcp-main.ts`.
 
-Required configuration:
-- `MCP_API_KEY` in environment.
-- `--api-key=<value>` when starting the process.
-- If missing or mismatched, startup fails.
+Authentication modes:
+- Recommended (per-user key):
+  - Pass user key as `--api-key=<USER_MCP_API_KEY>`.
+  - No `--access-token` required.
+- Legacy compatibility mode:
+  - Keep `MCP_API_KEY` in environment.
+  - Start with `--api-key=<MCP_API_KEY> --access-token=<JWT>`.
+  - Startup fails if the legacy API key mismatches.
 
 Available tools (API v1 parity):
 - `list_projects`
@@ -38,16 +42,34 @@ Available tools (API v1 parity):
 - `move_task_status`
 - `delete_task`
 
+Create a per-user MCP API key:
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"username":"dev","password":"dev"}' | jq -r '.meta.accessToken')
+
+curl -s -X POST http://localhost:3000/api/v1/users/me/mcp-api-keys \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"name":"Local MCP key"}'
+```
+
 Run locally:
 ```bash
 cd modules
-MCP_API_KEY=change-me pnpm mcp:dev
+MCP_API_KEY=<USER_MCP_API_KEY> pnpm mcp:dev
 ```
 
 Run compiled binary:
 ```bash
 cd modules
-MCP_API_KEY=change-me pnpm mcp:start
+MCP_API_KEY=<USER_MCP_API_KEY> pnpm mcp:start
+```
+
+Legacy mode:
+```bash
+cd modules
+MCP_API_KEY=change-me MCP_ACCESS_TOKEN=<JWT_FROM_LOGIN> pnpm mcp:dev:legacy
 ```
 
 Docker-first note:
@@ -79,7 +101,7 @@ docker compose -f docker/compose.dev.yml exec -T mariadb mariadb -uroot -proot -
 For immediate UI changes (Vite + HMR inside Docker):
 
 ```bash
-docker compose -f docker/compose.dev.yml up -d mariadb backend web-dev
+docker compose -f docker/compose.dev.yml --profile dev-watch up -d mariadb backend-dev web-dev
 ```
 
 Frontend dev:
@@ -87,11 +109,18 @@ Frontend dev:
 
 Notes:
 - `web-dev` uses a repo bind mount and runs `pnpm dev`.
-- `/api/*` is automatically proxied to `backend` from Vite.
+- `backend-dev` uses a repo bind mount and runs `pnpm dev` (`tsx watch`) for API hot reload.
+- `/api/*` is automatically proxied to `backend-dev` from Vite.
 - If `web` (nginx on `:8080`) is already running, you can keep it or stop it:
 
 ```bash
 docker compose -f docker/compose.dev.yml stop web
+```
+
+To stop the watch stack:
+
+```bash
+docker compose -f docker/compose.dev.yml --profile dev-watch stop backend-dev web-dev
 ```
 
 ## Quality And Checks
@@ -137,13 +166,19 @@ Remote deployment:
   - `http://localhost:3002/health/live`
 
 ## Quick Troubleshooting
-- If `Unexpected API error` appears while using new endpoints, make sure the backend is not stale and rebuild:
+- If `Unexpected API error` appears while using new endpoints:
+  - Compiled stack (`backend`): rebuild container image.
+  - Watch stack (`backend-dev`): restart service to reset runtime state.
 
 ```bash
+# compiled stack
 docker compose -f docker/compose.dev.yml up -d --build backend
+
+# watch stack
+docker compose -f docker/compose.dev.yml --profile dev-watch restart backend-dev
 ```
 
-- Then validate backend health:
+- Then validate backend health (replace service name with `backend-dev` when using watch stack):
 
 ```bash
 docker compose -f docker/compose.dev.yml exec -T backend node -e "fetch('http://127.0.0.1:3000/health/ready').then(r=>console.log(r.status)).catch(()=>process.exit(1))"

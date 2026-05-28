@@ -84,20 +84,21 @@ export const mcpGuide: McpGuideContent = {
       command: 'docker compose -f docker/compose.dev.yml up -d mariadb backend web'
     },
     {
-      heading: '3. Authenticate and get a user access token',
-      content: 'Request an access token from the auth API. Use this token as MCP actor context.',
+      heading: '3. Authenticate and get a bearer token',
+      content: 'Request an access token from the auth API. Use it only to create/revoke MCP API keys.',
       command:
-        "curl -s -X POST http://localhost:3000/api/v1/auth/login -H 'content-type: application/json' -d '{\"username\":\"john_doe\",\"password\":\"password123\"}'"
+        "curl -s -X POST http://localhost:3000/api/v1/auth/login -H 'content-type: application/json' -d '{\"username\":\"dev\",\"password\":\"dev\"}'"
     },
     {
-      heading: '4. Configure MCP credentials',
-      content: 'Both values are mandatory. API key must match server env and access token must be a valid JWT.',
-      command: 'export MCP_API_KEY=change-me && export MCP_ACCESS_TOKEN=<JWT_FROM_LOGIN>'
+      heading: '4. Create per-user MCP API key',
+      content: 'Create a user key and keep the value from `meta.apiKey`. It is shown only at creation time.',
+      command:
+        "curl -s -X POST http://localhost:3000/api/v1/users/me/mcp-api-keys -H 'authorization: Bearer <JWT_FROM_LOGIN>' -H 'content-type: application/json' -d '{\"name\":\"Local MCP key\"}'"
     },
     {
       heading: '5. Run MCP stdio process',
-      content: 'Start MCP runtime from modules. This process is the one your LLM client must execute.',
-      command: 'cd modules && pnpm mcp:dev'
+      content: 'Start MCP runtime using the user key as `--api-key`. No access token is required in this mode.',
+      command: 'cd modules && MCP_API_KEY=<USER_MCP_API_KEY> pnpm mcp:dev'
     }
   ],
   clientConfigExample: `{
@@ -106,7 +107,7 @@ export const mcpGuide: McpGuideContent = {
       "command": "bash",
       "args": [
         "-lc",
-        "cd <repo>/modules && MCP_API_KEY=change-me MCP_ACCESS_TOKEN=<JWT_FROM_LOGIN> pnpm mcp:dev"
+        "cd <repo>/modules && MCP_API_KEY=<USER_MCP_API_KEY> pnpm mcp:dev"
       ]
     }
   }

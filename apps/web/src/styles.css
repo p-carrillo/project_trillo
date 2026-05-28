@@ -1554,6 +1554,77 @@ select {
   margin: 0;
 }
 
+.mcp-api-keys-panel {
+  gap: 0.7rem;
+}
+
+.mcp-api-keys-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.mcp-api-keys-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mcp-api-key-secret {
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-muted);
+  padding: 0.65rem 0.7rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.mcp-api-key-secret-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mcp-api-key-secret code {
+  overflow-wrap: anywhere;
+}
+
+.mcp-api-keys-empty {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.mcp-api-keys-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.mcp-api-keys-item {
+  border: 1px solid var(--border-soft);
+  background: var(--bg-panel-muted);
+  padding: 0.6rem 0.65rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.mcp-api-keys-item-name {
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.mcp-api-keys-item-meta {
+  margin: 0.16rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.79rem;
+}
+
 .homepage {
   min-height: 100vh;
   background: #f3f4f6;
