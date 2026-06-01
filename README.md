@@ -16,6 +16,7 @@ Fullstack task manager with Hexagonal Architecture in the backend, shared contra
 - `GET /api/v1/tasks?boardId=<id>`
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/:taskId/status`
+- `POST|GET|DELETE /mcp`
 - `GET /health/live`
 - `GET /health/ready`
 
@@ -41,6 +42,40 @@ Available tools (API v1 parity):
 - `update_task`
 - `move_task_status`
 - `delete_task`
+
+## MCP (`Streamable HTTP`) For Remote Agents
+The backend HTTP runtime also exposes MCP over Streamable HTTP at:
+
+- `POST|GET|DELETE /mcp`
+
+Authentication:
+- Use a user-scoped MCP API key only.
+- Recommended header:
+  - `Authorization: Bearer <USER_MCP_API_KEY>`
+- Compatibility header:
+  - `x-mcp-api-key: <USER_MCP_API_KEY>`
+
+Example initialize call:
+```bash
+curl -i -X POST https://monotask.diteria.net/mcp \
+  -H 'authorization: Bearer <USER_MCP_API_KEY>' \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"initialize",
+    "params":{
+      "protocolVersion":"2025-03-26",
+      "capabilities":{},
+      "clientInfo":{"name":"manual-client","version":"1.0.0"}
+    }
+  }'
+```
+
+Notes:
+- Keep the returned `mcp-session-id` response header and send it in subsequent MCP requests.
+- Send `mcp-protocol-version` in subsequent requests.
 
 Create a per-user MCP API key:
 ```bash
