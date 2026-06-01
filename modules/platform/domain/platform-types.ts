@@ -1,5 +1,5 @@
 import type { ContextService, ProjectService, TaskService } from '../../tasks/application';
-import type { AuthService, UserService } from '../../users/application';
+import type { AuthService, McpApiKeyService, UserService } from '../../users/application';
 
 export interface PlatformDependencies {
   contextService: ContextService;
@@ -7,6 +7,7 @@ export interface PlatformDependencies {
   taskService: TaskService;
   authService: AuthService;
   userService: UserService;
+  mcpApiKeyService: McpApiKeyService;
   isDatabaseReady: () => Promise<boolean>;
 }
 

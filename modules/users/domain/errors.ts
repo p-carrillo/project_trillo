@@ -64,3 +64,21 @@ export class UnauthorizedError extends UserDomainError {
     super('unauthorized', message);
   }
 }
+
+export class InvalidMcpApiKeyNameError extends UserDomainError {
+  constructor() {
+    super('invalid_mcp_api_key_name', 'MCP API key name must have between 2 and 80 characters.');
+  }
+}
+
+export class McpApiKeyNotFoundError extends UserDomainError {
+  constructor(keyId: string) {
+    super('mcp_api_key_not_found', `MCP API key ${keyId} was not found.`);
+  }
+}
+
+export class InvalidMcpApiKeyExpirationError extends UserDomainError {
+  constructor() {
+    super('invalid_mcp_api_key_expiration', 'MCP API key expiration date is invalid.');
+  }
+}

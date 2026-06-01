@@ -4,9 +4,10 @@ import { ContextService, ProjectService, TaskService } from '../../tasks/applica
 import { InMemoryContextRepository } from '../../tasks/test/helpers/in-memory-context-repository';
 import { InMemoryProjectRepository } from '../../tasks/test/helpers/in-memory-project-repository';
 import { InMemoryTaskRepository } from '../../tasks/test/helpers/in-memory-task-repository';
-import { AuthService, UserService } from '../../users/application';
+import { AuthService, McpApiKeyService, UserService } from '../../users/application';
 import { InMemoryUserRepository } from '../../users/test/helpers/in-memory-user-repository';
 import { FakeAccessTokenService } from '../../users/test/helpers/fake-access-token-service';
+import { InMemoryMcpApiKeyRepository } from '../../users/test/helpers/in-memory-mcp-api-key-repository';
 import { FakePasswordHasher } from '../../users/test/helpers/fake-password-hasher';
 
 describe('Task API contract with tenancy', () => {
@@ -440,6 +441,7 @@ async function createTestServer() {
   const userRepository = new InMemoryUserRepository();
   const passwordHasher = new FakePasswordHasher();
   const tokenService = new FakeAccessTokenService();
+  const mcpApiKeyRepository = new InMemoryMcpApiKeyRepository();
   const now = new Date('2026-02-17T10:00:00.000Z');
 
   const contextService = new ContextService(contextRepository, projectRepository, () => now);
@@ -447,6 +449,7 @@ async function createTestServer() {
   const taskService = new TaskService(taskRepository, projectRepository, () => now);
   const authService = new AuthService(userRepository, passwordHasher, tokenService, () => now);
   const userService = new UserService(userRepository, passwordHasher, () => now);
+  const mcpApiKeyService = new McpApiKeyService(userRepository, mcpApiKeyRepository, passwordHasher, () => now);
 
   const userAlpha = await authService.register({
     username: 'alpha',
@@ -468,6 +471,7 @@ async function createTestServer() {
     taskService,
     authService,
     userService,
+    mcpApiKeyService,
     isDatabaseReady: async () => true
   });
 

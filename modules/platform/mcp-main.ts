@@ -1,6 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createPlatformMcpServer } from './application';
-import { createDatabasePool, loadMcpApiKey, loadPlatformConfig, type PlatformConfig } from './infrastructure';
+import { createDatabasePool, loadPlatformConfig, type PlatformConfig } from './infrastructure';
 import {
   MariaDbContextRepository,
   MariaDbProjectRepository,
@@ -12,14 +12,18 @@ import {
 import {
   AuthService,
   JwtAccessTokenService,
+  MariaDbMcpApiKeyRepository,
   MariaDbUserRepository,
+  McpApiKeyService,
   ScryptPasswordHasher,
   runUserMigrations
 } from '../users';
 
 interface McpRuntimeContext {
   config: PlatformConfig;
-  accessToken: string;
+  providedApiKey: string;
+  legacyApiKey: string | null;
+  accessToken: string | null;
 }
 
 async function start(): Promise<void> {
@@ -41,8 +45,13 @@ async function start(): Promise<void> {
     new ScryptPasswordHasher(),
     new JwtAccessTokenService(runtime.config.auth.jwtAccessSecret, runtime.config.auth.jwtAccessExpiresInSeconds)
   );
+  const mcpApiKeyService = new McpApiKeyService(
+    userRepository,
+    new MariaDbMcpApiKeyRepository(pool),
+    new ScryptPasswordHasher()
+  );
 
-  const actor = await authService.authenticateAccessToken(runtime.accessToken);
+  const actor = await resolveMcpActor(runtime, authService, mcpApiKeyService);
 
   const contextRepository = new MariaDbContextRepository(pool);
   const projectRepository = new MariaDbProjectRepository(pool);
@@ -88,22 +97,47 @@ async function start(): Promise<void> {
 
 function loadMcpRuntimeContext(env: NodeJS.ProcessEnv, args: string[]): McpRuntimeContext {
   const config = loadPlatformConfig(env);
-  const configuredApiKey = loadMcpApiKey(env);
-
   const providedApiKey = parseArgument(args, 'api-key');
-  if (providedApiKey !== configuredApiKey) {
-    throw new Error('Invalid MCP API key.');
-  }
-
-  const accessToken = parseArgument(args, 'access-token');
+  const accessToken = parseOptionalArgument(args, 'access-token');
 
   return {
     config,
+    providedApiKey,
+    legacyApiKey: env.MCP_API_KEY?.trim() || null,
     accessToken
   };
 }
 
+async function resolveMcpActor(
+  runtime: McpRuntimeContext,
+  authService: AuthService,
+  mcpApiKeyService: McpApiKeyService
+): Promise<{ userId: string; username: string }> {
+  if (runtime.accessToken) {
+    if (!runtime.legacyApiKey) {
+      throw new Error('MCP_API_KEY environment variable is required for legacy MCP authentication.');
+    }
+
+    if (runtime.providedApiKey !== runtime.legacyApiKey) {
+      throw new Error('Invalid legacy MCP API key.');
+    }
+
+    return authService.authenticateAccessToken(runtime.accessToken);
+  }
+
+  return mcpApiKeyService.authenticate(runtime.providedApiKey);
+}
+
 function parseArgument(args: string[], name: string): string {
+  const value = parseOptionalArgument(args, name);
+  if (!value) {
+    throw new Error(`Missing required --${name} argument.`);
+  }
+
+  return value;
+}
+
+function parseOptionalArgument(args: string[], name: string): string | null {
   const longForm = `--${name}`;
   const inlinePrefix = `${longForm}=`;
 
@@ -132,7 +166,7 @@ function parseArgument(args: string[], name: string): string {
     }
   }
 
-  throw new Error(`Missing required ${longForm} argument.`);
+  return null;
 }
 
 async function closeMcpServer(server: { close?: () => Promise<void> }): Promise<void> {

@@ -59,6 +59,38 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface McpApiKeyDto {
+  id: string;
+  name: string;
+  keyPreview: string;
+  keyPrefix: string;
+  keySuffix: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListMcpApiKeysResponse {
+  data: McpApiKeyDto[];
+  meta: {
+    total: number;
+  };
+}
+
+export interface CreateMcpApiKeyRequest {
+  name: string;
+  expiresAt?: string | null;
+}
+
+export interface CreateMcpApiKeyResponse {
+  data: McpApiKeyDto;
+  meta: {
+    apiKey: string;
+  };
+}
+
 export interface ContextDto {
   id: ContextId;
   name: string;
