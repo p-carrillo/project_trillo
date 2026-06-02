@@ -112,32 +112,36 @@ export function TaskColumn({
         </div>
       </header>
 
-      <div className="task-list">
-        {visibleTasks.length === 0 ? (
-          <div className="empty-state">No tasks in this stage.</div>
-        ) : (
-          visibleTasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onEditTask={onEditTask}
-              onStartDragging={onStartDragging}
-              onEndDragging={onEndDragging}
-              isDragging={draggingTaskId === task.id}
-              isDragDisabled={isColumnDragActive}
-              isEpicCollapsed={collapsedEpicIds.includes(task.id)}
-              onToggleEpicTasks={onToggleEpicTasks}
-            />
-          ))
-        )}
-        <button
-          type="button"
-          className="column-add-task-btn"
-          onClick={onOpenCreateTask}
-          aria-label={`Create task in ${column.label} column`}
-        >
-          New Task
-        </button>
+      <div className="task-column-content">
+        <div className="task-list">
+          {visibleTasks.length === 0 ? (
+            <div className="empty-state">No tasks in this stage.</div>
+          ) : (
+            visibleTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onEditTask={onEditTask}
+                onStartDragging={onStartDragging}
+                onEndDragging={onEndDragging}
+                isDragging={draggingTaskId === task.id}
+                isDragDisabled={isColumnDragActive}
+                isEpicCollapsed={collapsedEpicIds.includes(task.id)}
+                onToggleEpicTasks={onToggleEpicTasks}
+              />
+            ))
+          )}
+        </div>
+        <div className="task-column-footer">
+          <button
+            type="button"
+            className="column-add-task-btn"
+            onClick={onOpenCreateTask}
+            aria-label={`Create task in ${column.label} column`}
+          >
+            New Task
+          </button>
+        </div>
       </div>
     </article>
   );

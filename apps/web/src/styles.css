@@ -679,8 +679,8 @@ select {
 .task-column {
   padding: 0.82rem;
   display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 67vh;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: clamp(22rem, 68dvh, 42rem);
 }
 
 .task-column--custom {
@@ -750,14 +750,30 @@ select {
   padding: 0.08rem 0.44rem;
 }
 
+.task-column-content {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.66rem;
+}
+
 .task-list {
+  min-height: 0;
   display: grid;
   align-content: start;
   gap: 0.66rem;
   overflow-y: auto;
+  padding-right: 0.12rem;
+}
+
+.task-column-footer {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 0.66rem;
+  background: linear-gradient(180deg, rgba(246, 247, 249, 0), #f6f7f9 38%);
 }
 
 .column-add-task-btn {
+  width: 100%;
   border: 1px dashed var(--border-strong);
   border-radius: 0;
   background: #ffffff;
@@ -1409,7 +1425,7 @@ select {
   }
 
   .task-column {
-    min-height: 72vh;
+    height: clamp(24rem, 72dvh, 48rem);
   }
 
   .add-column-card {
