@@ -1,4 +1,5 @@
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { TaskDto } from '@trillo/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -66,6 +67,24 @@ describe('TaskColumn', () => {
     expect(screen.queryByText('Epic')).not.toBeNull();
     expect(screen.queryByText('Linked task')).toBeNull();
     expect(screen.queryByText('Standalone task')).not.toBeNull();
+  });
+
+  it('keeps the create action outside the scrolling task list and clickable', async () => {
+    const user = userEvent.setup();
+    const onOpenCreateTask = vi.fn();
+
+    renderColumn({ onOpenCreateTask });
+
+    const createButton = screen.getByRole('button', { name: 'Create task in To Do column' });
+    const taskList = screen.getByText('Setup CI pipeline').closest('.task-list');
+
+    expect(taskList).not.toBeNull();
+    expect(createButton.closest('.task-list')).toBeNull();
+    expect(createButton.parentElement).toHaveClass('task-column-footer');
+
+    await user.click(createButton);
+
+    expect(onOpenCreateTask).toHaveBeenCalledTimes(1);
   });
 });
 
