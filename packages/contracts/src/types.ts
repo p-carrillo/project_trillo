@@ -124,6 +124,7 @@ export interface ProjectDto {
   id: ProjectId;
   name: string;
   description: string | null;
+  notes: string | null;
   contextIds: ContextId[];
   createdAt: string;
   updatedAt: string;
@@ -139,12 +140,14 @@ export interface ListProjectsResponse {
 export interface CreateProjectRequest {
   name: string;
   description?: string | null;
+  notes?: string | null;
   contextIds?: ContextId[];
 }
 
 export interface UpdateProjectRequest {
   name?: string;
   description?: string | null;
+  notes?: string | null;
   contextIds?: ContextId[];
 }
 

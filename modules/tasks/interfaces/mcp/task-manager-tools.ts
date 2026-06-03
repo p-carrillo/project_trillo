@@ -120,6 +120,7 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
         properties: {
           name: { type: 'string', minLength: 2, maxLength: 120 },
           description: { type: 'string', nullable: true, maxLength: 4000 },
+          notes: { type: 'string', nullable: true, maxLength: 10000 },
           contextIds: {
             type: 'array',
             items: { type: 'string', minLength: 2, maxLength: 64 }
@@ -131,13 +132,14 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
     },
     {
       name: 'update_project',
-      description: 'Update a project name or description.',
+      description: 'Update a project name, description, or notes.',
       inputSchema: {
         type: 'object',
         properties: {
           projectId: { type: 'string', minLength: 2, maxLength: 64 },
           name: { type: 'string', minLength: 2, maxLength: 120 },
           description: { type: 'string', nullable: true, maxLength: 4000 },
+          notes: { type: 'string', nullable: true, maxLength: 10000 },
           contextIds: {
             type: 'array',
             items: { type: 'string', minLength: 2, maxLength: 64 }
@@ -344,11 +346,16 @@ export function createTaskManagerToolset(dependencies: TaskManagerToolDependenci
 function parseCreateProjectArgs(args: ToolArgs): CreateProjectInput {
   const name = parseRequiredString(args.name, 'name');
   const description = parseOptionalStringOrNull(args.description, 'description');
+  const notes = parseOptionalStringOrNull(args.notes, 'notes');
   const contextIds = parseOptionalStringArray(args.contextIds, 'contextIds');
   const payload: CreateProjectInput = { name };
 
   if (description !== undefined) {
     payload.description = description;
+  }
+
+  if (notes !== undefined) {
+    payload.notes = notes;
   }
 
   if (contextIds !== undefined) {
@@ -373,6 +380,13 @@ function parseUpdateProjectArgs(args: ToolArgs): { projectId: string; payload: U
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(args, 'notes')) {
+    const notes = parseOptionalStringOrNull(args.notes, 'notes');
+    if (notes !== undefined) {
+      payload.notes = notes;
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(args, 'contextIds')) {
     const contextIds = parseOptionalStringArray(args.contextIds, 'contextIds');
     if (contextIds !== undefined) {
@@ -382,7 +396,7 @@ function parseUpdateProjectArgs(args: ToolArgs): { projectId: string; payload: U
 
   if (Object.keys(payload).length === 0) {
     throw new ValidationError('Invalid request payload.', {
-      body: 'At least one field is required: name, description, contextIds.'
+      body: 'At least one field is required: name, description, notes, contextIds.'
     });
   }
 
@@ -590,6 +604,7 @@ function toProjectDto(project: Project) {
     id: project.id,
     name: project.name,
     description: project.description,
+    notes: project.notes,
     contextIds: project.contextIds,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString()

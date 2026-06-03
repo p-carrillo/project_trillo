@@ -70,6 +70,7 @@ export class InMemoryProjectRepository implements ProjectRepository {
       ...current,
       name: patch.name,
       description: patch.description,
+      notes: patch.notes,
       contextIds: [...patch.contextIds],
       updatedAt
     };

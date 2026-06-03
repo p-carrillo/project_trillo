@@ -61,6 +61,7 @@ interface CustomColumn {
 interface ProjectFormState {
   name: string;
   description: string;
+  notes: string;
   contextIds: string[];
 }
 
@@ -120,6 +121,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
   const [projectForm, setProjectForm] = useState<ProjectFormState>({
     name: '',
     description: '',
+    notes: '',
     contextIds: []
   });
   const [columnLabelOverrides, setColumnLabelOverrides] = useState<ColumnLabelOverrides>({});
@@ -567,6 +569,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setProjectForm({
       name: project.name,
       description: project.description ?? '',
+      notes: project.notes ?? '',
       contextIds: [...project.contextIds]
     });
     setIsProjectPanelOpen(true);
@@ -607,6 +610,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
 
     const nextName = projectForm.name.trim();
     const nextDescription = normalizeProjectDescription(projectForm.description);
+    const nextNotes = normalizeProjectNotes(projectForm.notes);
     const nextContextIds = Array.from(new Set(projectForm.contextIds));
 
     if (nextName.length === 0) {
@@ -616,6 +620,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     if (
       project.name === nextName &&
       project.description === nextDescription &&
+      project.notes === nextNotes &&
       isStringArrayEqual(project.contextIds, nextContextIds)
     ) {
       handleCloseProjectPanel();
@@ -629,6 +634,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
       const updated = await updateProjectRecord(editingProjectId, {
         name: nextName,
         description: nextDescription,
+        notes: nextNotes,
         contextIds: nextContextIds
       });
 
@@ -1310,6 +1316,7 @@ export function WorkspaceApp({ username, onOpenProfilePanel, onSessionInvalid }:
     setProjectForm({
       name: '',
       description: '',
+      notes: '',
       contextIds: []
     });
   }
@@ -1541,6 +1548,15 @@ function normalizeProjectDescription(value: string): string | null {
   }
 
   return normalized.slice(0, 4000);
+}
+
+function normalizeProjectNotes(value: string): string | null {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return normalized.slice(0, 10000);
 }
 
 function createCustomColumnId(): string {

@@ -1,10 +1,11 @@
-import { InvalidBoardIdError, InvalidProjectDescriptionError, InvalidProjectNameError } from './errors';
+import { InvalidBoardIdError, InvalidProjectDescriptionError, InvalidProjectNameError, InvalidProjectNotesError } from './errors';
 
 export interface Project {
   id: string;
   ownerUserId: string;
   name: string;
   description: string | null;
+  notes: string | null;
   contextIds: string[];
   sortOrder: number;
   createdAt: Date;
@@ -16,6 +17,7 @@ export interface NewProject {
   ownerUserId: string;
   name: string;
   description: string | null;
+  notes: string | null;
   contextIds: string[];
   sortOrder: number;
   createdAt: Date;
@@ -25,6 +27,7 @@ export interface NewProject {
 export interface ProjectPatch {
   name: string;
   description: string | null;
+  notes: string | null;
   contextIds: string[];
 }
 
@@ -63,4 +66,22 @@ export function normalizeProjectDescription(rawDescription?: string | null): str
   }
 
   return description;
+}
+
+export function normalizeProjectNotes(rawNotes?: string | null): string | null {
+  if (typeof rawNotes !== 'string') {
+    return null;
+  }
+
+  const notes = rawNotes.trim();
+
+  if (notes.length === 0) {
+    return null;
+  }
+
+  if (notes.length > 10000) {
+    throw new InvalidProjectNotesError();
+  }
+
+  return notes;
 }

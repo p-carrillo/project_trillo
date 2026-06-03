@@ -245,6 +245,7 @@ function createProject(): ProjectDto {
     id: 'project-alpha',
     name: 'Project Alpha',
     description: 'Main project',
+    notes: null,
     contextIds: ['context-personal'],
     createdAt: '2026-02-20T00:00:00.000Z',
     updatedAt: '2026-02-20T00:00:00.000Z'
@@ -276,6 +277,7 @@ function createWorkOnlyProject(): ProjectDto {
     id: 'project-work-only',
     name: 'Project Work Only',
     description: null,
+    notes: null,
     contextIds: ['context-work'],
     createdAt: '2026-02-20T00:00:00.000Z',
     updatedAt: '2026-02-20T00:00:00.000Z'

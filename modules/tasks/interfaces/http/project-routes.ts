@@ -3,6 +3,7 @@ import {
   ContextNotFoundError,
   InvalidContextIdError,
   InvalidProjectContextSelectionError,
+  InvalidProjectNotesError,
   InvalidProjectOrderError,
   InvalidProjectDescriptionError,
   InvalidProjectNameError,
@@ -193,6 +194,7 @@ function parseCreateProjectBody(body: FastifyRequest['body']): CreateProjectInpu
   const input = parseRecordBody(body);
   const name = input.name;
   const description = input.description;
+  const notes = input.notes;
 
   if (typeof name !== 'string') {
     throw new ValidationError({ name: 'name is required.' });
@@ -202,10 +204,18 @@ function parseCreateProjectBody(body: FastifyRequest['body']): CreateProjectInpu
     throw new ValidationError({ description: 'description must be a string or null.' });
   }
 
+  if (notes !== undefined && notes !== null && typeof notes !== 'string') {
+    throw new ValidationError({ notes: 'notes must be a string or null.' });
+  }
+
   const payload: CreateProjectInput = { name };
 
   if (typeof description === 'string' || description === null) {
     payload.description = description;
+  }
+
+  if (typeof notes === 'string' || notes === null) {
+    payload.notes = notes;
   }
 
   if (input.contextIds !== undefined) {
@@ -235,13 +245,21 @@ function parseUpdateProjectBody(body: FastifyRequest['body']): UpdateProjectInpu
     payload.description = input.description;
   }
 
+  if (input.notes !== undefined) {
+    if (typeof input.notes !== 'string' && input.notes !== null) {
+      throw new ValidationError({ notes: 'notes must be a string or null.' });
+    }
+
+    payload.notes = input.notes;
+  }
+
   if (input.contextIds !== undefined) {
     payload.contextIds = parseContextIds(input.contextIds);
   }
 
   if (Object.keys(payload).length === 0) {
     throw new ValidationError({
-      body: 'At least one field is required: name, description, contextIds.'
+      body: 'At least one field is required: name, description, notes, contextIds.'
     });
   }
 
@@ -288,6 +306,7 @@ function toProjectDto(project: Project) {
     id: project.id,
     name: project.name,
     description: project.description,
+    notes: project.notes,
     contextIds: project.contextIds,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString()
@@ -329,6 +348,7 @@ function mapError(error: unknown): { statusCode: number; body: ErrorBody } {
   if (
     error instanceof InvalidProjectNameError ||
     error instanceof InvalidProjectDescriptionError ||
+    error instanceof InvalidProjectNotesError ||
     error instanceof InvalidContextIdError ||
     error instanceof InvalidProjectContextSelectionError
   ) {

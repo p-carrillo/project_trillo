@@ -120,6 +120,7 @@ export class ContextService {
         {
           name: project.name,
           description: project.description,
+          notes: project.notes,
           contextIds: [fallbackContext.id]
         },
         updatedAt

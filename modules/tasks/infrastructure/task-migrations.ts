@@ -325,6 +325,13 @@ export async function runTaskMigrations(
     `);
   }
 
+  if (!(await hasTableColumn(pool, 'projects', 'notes'))) {
+    await pool.query(`
+      ALTER TABLE projects
+      ADD COLUMN notes TEXT NULL AFTER description
+    `);
+  }
+
   const sortOrderColumnWasMissing = !(await hasTableColumn(pool, 'projects', 'sort_order'));
   if (sortOrderColumnWasMissing) {
     await pool.query(`

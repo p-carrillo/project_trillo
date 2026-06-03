@@ -13,6 +13,7 @@ interface ProjectRow extends RowDataPacket {
   owner_user_id: string;
   name: string;
   description: string | null;
+  notes: string | null;
   sort_order: number;
   created_at: Date;
   updated_at: Date;
@@ -30,7 +31,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
     const [rows] = contextId
       ? await this.pool.query<ProjectRow[]>(
           `
-          SELECT p.id, p.owner_user_id, p.name, p.description, p.sort_order, p.created_at, p.updated_at
+          SELECT p.id, p.owner_user_id, p.name, p.description, p.notes, p.sort_order, p.created_at, p.updated_at
           FROM projects p
           INNER JOIN project_contexts pc ON pc.project_id = p.id
           INNER JOIN contexts c ON c.id = pc.context_id
@@ -43,7 +44,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
         )
       : await this.pool.query<ProjectRow[]>(
           `
-          SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
+          SELECT id, owner_user_id, name, description, notes, sort_order, created_at, updated_at
           FROM projects
           WHERE owner_user_id = ?
           ORDER BY sort_order ASC, created_at ASC, id ASC
@@ -57,7 +58,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findById(projectId: string, userId: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
+      SELECT id, owner_user_id, name, description, notes, sort_order, created_at, updated_at
       FROM projects
       WHERE id = ? AND owner_user_id = ?
       LIMIT 1
@@ -78,7 +79,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
   async findByName(name: string, userId: string): Promise<Project | null> {
     const [rows] = await this.pool.query<ProjectRow[]>(
       `
-      SELECT id, owner_user_id, name, description, sort_order, created_at, updated_at
+      SELECT id, owner_user_id, name, description, notes, sort_order, created_at, updated_at
       FROM projects
       WHERE name = ? AND owner_user_id = ?
       LIMIT 1
@@ -105,14 +106,15 @@ export class MariaDbProjectRepository implements ProjectRepository {
       try {
         await connection.query<ResultSetHeader>(
           `
-          INSERT INTO projects (id, owner_user_id, name, description, sort_order, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO projects (id, owner_user_id, name, description, notes, sort_order, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `,
           [
             project.id,
             project.ownerUserId,
             project.name,
             project.description,
+            project.notes,
             project.sortOrder,
             project.createdAt,
             project.updatedAt
@@ -155,10 +157,10 @@ export class MariaDbProjectRepository implements ProjectRepository {
         const [result] = await connection.query<ResultSetHeader>(
           `
           UPDATE projects
-          SET name = ?, description = ?, updated_at = ?
+          SET name = ?, description = ?, notes = ?, updated_at = ?
           WHERE id = ? AND owner_user_id = ?
           `,
-          [patch.name, patch.description, updatedAt, projectId, userId]
+          [patch.name, patch.description, patch.notes, updatedAt, projectId, userId]
         );
 
         if (result.affectedRows === 0) {
@@ -277,6 +279,7 @@ export class MariaDbProjectRepository implements ProjectRepository {
       ownerUserId: row.owner_user_id,
       name: row.name,
       description: row.description,
+      notes: row.notes,
       contextIds,
       sortOrder: row.sort_order,
       createdAt: new Date(row.created_at),
