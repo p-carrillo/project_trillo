@@ -38,6 +38,12 @@ export class InvalidProjectDescriptionError extends TaskDomainError {
   }
 }
 
+export class InvalidProjectNotesError extends TaskDomainError {
+  constructor() {
+    super('invalid_project_notes', 'Project notes must have at most 10000 characters.');
+  }
+}
+
 export class InvalidContextIdError extends TaskDomainError {
   constructor() {
     super('invalid_context_id', 'Context id must have between 2 and 64 characters.');

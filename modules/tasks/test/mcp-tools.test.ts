@@ -111,6 +111,7 @@ async function createToolset() {
     ownerUserId: actorUserId,
     name: 'Project Alpha',
     description: 'Primary board for product planning and delivery.',
+    notes: null,
     contextIds: [defaultContext.id],
     sortOrder: 0,
     createdAt: now,

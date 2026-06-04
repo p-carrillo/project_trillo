@@ -6,6 +6,7 @@ import {
   normalizeContextId,
   normalizeProjectDescription,
   normalizeProjectName,
+  normalizeProjectNotes,
   ProjectNameTakenError,
   ProjectNotFoundError,
   type ContextRepository,
@@ -17,12 +18,14 @@ import {
 export interface CreateProjectInput {
   name: string;
   description?: string | null;
+  notes?: string | null;
   contextIds?: string[];
 }
 
 export interface UpdateProjectInput {
   name?: string;
   description?: string | null;
+  notes?: string | null;
   contextIds?: string[];
 }
 
@@ -52,6 +55,7 @@ export class ProjectService {
   async createProject(userId: string, input: CreateProjectInput): Promise<Project> {
     const name = normalizeProjectName(input.name);
     const description = normalizeProjectDescription(input.description);
+    const notes = normalizeProjectNotes(input.notes);
     const existingProject = await this.repository.findByName(name, userId);
 
     if (existingProject) {
@@ -67,6 +71,7 @@ export class ProjectService {
       ownerUserId: userId,
       name,
       description,
+      notes,
       contextIds,
       sortOrder: currentProjects.length,
       createdAt,
@@ -83,12 +88,16 @@ export class ProjectService {
 
     const hasName = Object.prototype.hasOwnProperty.call(input, 'name');
     const hasDescription = Object.prototype.hasOwnProperty.call(input, 'description');
+    const hasNotes = Object.prototype.hasOwnProperty.call(input, 'notes');
     const hasContextIds = Object.prototype.hasOwnProperty.call(input, 'contextIds');
 
     const nextName = hasName ? normalizeProjectName(input.name ?? '') : current.name;
     const nextDescription = hasDescription
       ? normalizeProjectDescription(input.description)
       : current.description;
+    const nextNotes = hasNotes
+      ? normalizeProjectNotes(input.notes)
+      : current.notes;
     const nextContextIds = hasContextIds
       ? await this.resolveContextIds(userId, input.contextIds)
       : current.contextIds;
@@ -107,6 +116,7 @@ export class ProjectService {
       {
         name: nextName,
         description: nextDescription,
+        notes: nextNotes,
         contextIds: nextContextIds
       },
       this.now()

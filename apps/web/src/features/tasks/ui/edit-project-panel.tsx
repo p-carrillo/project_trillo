@@ -3,6 +3,7 @@ import { useEffect, useRef, type FormEvent } from 'react';
 interface ProjectFormState {
   name: string;
   description: string;
+  notes: string;
   contextIds: string[];
 }
 
@@ -77,6 +78,15 @@ export function EditProjectPanel({
           value={form.description}
           onChange={(event) => onUpdateField('description', event.target.value)}
           maxLength={4000}
+          rows={4}
+        />
+
+        <label htmlFor="project-edit-notes">Notes</label>
+        <textarea
+          id="project-edit-notes"
+          value={form.notes}
+          onChange={(event) => onUpdateField('notes', event.target.value)}
+          maxLength={10000}
           rows={4}
         />
 

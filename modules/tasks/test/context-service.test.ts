@@ -76,6 +76,7 @@ describe('ContextService', () => {
       ownerUserId: USER_ALPHA,
       name: 'Alpha',
       description: null,
+      notes: null,
       contextIds: [work.id],
       sortOrder: 0,
       createdAt: NOW,

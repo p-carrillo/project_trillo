@@ -959,6 +959,7 @@ components:
         - id
         - name
         - description
+        - notes
         - contextIds
         - createdAt
         - updatedAt
@@ -976,6 +977,11 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+        notes:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 10000
         contextIds:
           type: array
           items:
@@ -1098,6 +1104,11 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+        notes:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 10000
         contextIds:
           type: array
           items:
@@ -1117,6 +1128,11 @@ components:
           nullable: true
           minLength: 0
           maxLength: 4000
+        notes:
+          type: string
+          nullable: true
+          minLength: 0
+          maxLength: 10000
         contextIds:
           type: array
           items:
